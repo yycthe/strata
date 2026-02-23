@@ -19,11 +19,18 @@ import {
   Send,
   Building,
   Activity,
+  Users,
 } from 'lucide-react';
 import { StrataPulseLogo } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useEffect, useState } from 'react';
+import { Button } from './ui/button';
+import { useFirebase } from '@/firebase';
+import {
+  initiateAnonymousSignIn,
+  initiateEmailSignIn,
+} from '@/firebase/non-blocking-login';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -34,6 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { href: '/inbox', label: 'Inbox Queue', icon: Inbox },
     { href: '/history', label: 'Sent History', icon: Send },
     { href: '/properties', label: 'Properties', icon: Building },
+    { href: '/owners', label: 'Owners', icon: Users },
   ];
 
   return (
@@ -72,6 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
+          <AuthStatus />
           <Separator className="my-2" />
           <SystemStatus />
         </SidebarFooter>
@@ -80,6 +89,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </SidebarProvider>
   );
 }
+
+function AuthStatus() {
+  const { auth, user, isUserLoading } = useFirebase();
+
+  if (isUserLoading) {
+    return <div className="text-xs text-muted-foreground">Auth loading...</div>;
+  }
+
+  if (user) {
+    return (
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Logged in as {user.isAnonymous ? 'Anonymous' : user.email}</span>
+        <Button variant="outline" size="sm" onClick={() => auth.signOut()}>
+          Logout
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => initiateAnonymousSignIn(auth)}
+      >
+        Sign In Anonymously
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() =>
+          initiateEmailSignIn(auth, 'test@example.com', 'password')
+        }
+      >
+        Sign In (Test User)
+      </Button>
+    </div>
+  );
+}
+
 
 function SystemStatus() {
   const [isOnline, setIsOnline] = useState(true);
@@ -107,7 +157,10 @@ function SystemStatus() {
         <Activity className="h-4 w-4" />
         <span>System Status</span>
       </div>
-      <Badge variant={isOnline ? 'default' : 'destructive'} className="bg-green-500 text-white data-[state=offline]:bg-red-500">
+      <Badge
+        variant={isOnline ? 'default' : 'destructive'}
+        className="bg-green-500 text-white data-[state=offline]:bg-red-500"
+      >
         {isOnline ? 'Online' : 'Offline'}
       </Badge>
     </div>
