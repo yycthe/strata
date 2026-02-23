@@ -1,0 +1,154 @@
+/**
+ * Core Philosophy:
+ * This ruleset enforces a strict, centralized Role-Based Access Control (RBAC) model.
+ * All access to core business data is restricted to authenticated users who are explicitly
+ * designated as administrators. This "admin-centric" approach ensures high security and
+ * simplifies data management for the application's backend processes.
+ *
+ * Data Structure:
+ * Core business entities (StrataNotices, Owners, Properties, etc.) are organized into
+ * separate top-level collections. A dedicated `/roles_admin/{userId}` collection serves
+ * as the single source of truth for administrative privileges. A user is considered an
+ * admin if a document with their UID exists in this collection.
+ *
+ * Key Security Decisions:
+ * - Admin-Only Access: All read and write operations on business data collections
+ *   are gated by a single check: `isAdmin()`.
+ * - No Granular User Permissions: The model does not support non-admin user access.
+ *   Fields like `assignedOwnerId` are for application logic only and are not used
+ *   for authorization in these rules.
+ * - Admin Management: Existing administrators are granted the ability to manage the
+ *   list of other administrators by creating or deleting documents in the `/roles_admin` collection.
+ * - Secure by Default: Any user who is not an authenticated administrator is denied all access.
+ *
+ * Denormalization for Authorization:
+ * The `/roles_admin` collection is a classic example of denormalization for authorization.
+ * By storing admin status in this collection, we can use a single, performant `exists()`
+ * call in our rules, avoiding slow and costly `get()` calls to other documents to determine
+ * a user's permissions.
+ *
+ * Structural Segregation:
+ * Each primary data type (StrataNotice, Owner, etc.) resides in its own top-level collection.
+ * This ensures that all documents within a given collection path share the same security
+ * requirements (admin-only), which simplifies rule logic and makes list queries both
+ * secure and efficient.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user has an administrator role.
+     * This is determined by the existence of a document in the /roles_admin
+     * collection with an ID matching the user's UID.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Defines administrators of the application. Only existing admins can read or manage this list.
+     * @path /roles_admin/{userId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (create) a new admin document at /roles_admin/new_admin_xyz.
+     * @deny A non-admin user (auth.uid='user_123') cannot (get) or (list) any documents in this collection.
+     * @principle Enforces Role-Based Access Control (RBAC) for managing administrative privileges.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Secures the main collection for all strata notices. Full CRUD access is restricted to administrators.
+     * @path /strataNotices/{noticeId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (create) a new notice at /strataNotices/notice_123.
+     * @deny A non-admin user (auth.uid='user_123') is denied all access, including (get) or (list).
+     * @principle Restricts all data access to verified administrators, ensuring data confidentiality.
+     */
+    match /strataNotices/{noticeId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Secures the master data collection for property owners. Full CRUD access is restricted to administrators.
+     * @path /owners/{ownerId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (update) an owner document at /owners/owner_xyz.
+     * @deny A non-admin user (auth.uid='user_123') cannot (list) the owners collection.
+     * @principle Restricts all data access to verified administrators, ensuring data confidentiality.
+     */
+    match /owners/{ownerId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Secures the master data collection for properties. Full CRUD access is restricted to administrators.
+     * @path /properties/{propertyId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (get) a property document at /properties/prop_456.
+     * @deny A non-admin user (auth.uid='user_123') cannot (create) a new property.
+     * @principle Restricts all data access to verified administrators, ensuring data confidentiality.
+     */
+    match /properties/{propertyId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Secures synchronization logs. Full read and write access is restricted to administrators for monitoring.
+     * @path /syncLogs/{logId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (list) all sync logs.
+     * @deny A non-admin user (auth.uid='user_123') is denied all access.
+     * @principle Restricts all data access to verified administrators, ensuring system integrity and monitoring confidentiality.
+     */
+    match /syncLogs/{logId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Secures attachment metadata. Full CRUD access is restricted to administrators.
+     * @path /attachments/{attachmentId}
+     * @allow An authenticated admin (auth.uid='admin_abc') can (delete) an attachment document at /attachments/attach_789.
+     * @deny A non-admin user (auth.uid='user_123') is denied all access.
+     * @principle Restricts all data access to verified administrators, ensuring data confidentiality.
+     */
+    match /attachments/{attachmentId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+  }
+}

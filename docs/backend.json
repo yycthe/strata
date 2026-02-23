@@ -1,0 +1,371 @@
+{
+  "entities": {
+    "StrataNotice": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StrataNotice",
+      "type": "object",
+      "description": "Represents a strata-related email notice ingested from Gmail, processed, and potentially dispatched.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the StrataNotice entity. Corresponds to the email's UID."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The subject line of the email notice."
+        },
+        "sender": {
+          "type": "string",
+          "description": "The sender's name and email address (e.g., 'Name <email@example.com>') from the email."
+        },
+        "receivedAt": {
+          "type": "string",
+          "description": "The date and time the email notice was received.",
+          "format": "date-time"
+        },
+        "content": {
+          "type": "string",
+          "description": "The cleaned plain text content of the email notice, after filtering URLs, HTML tags, etc."
+        },
+        "html": {
+          "type": "string",
+          "description": "The original HTML content of the email notice. May be empty if not stored."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current processing status of the notice. (Enum: 'New', 'Ready', 'Review', 'Dispatched', 'Ignored')"
+        },
+        "planCode": {
+          "type": "string",
+          "description": "The first strata plan code matched in the email content, used for initial categorization and owner recommendation."
+        },
+        "allPlanCodes": {
+          "type": "array",
+          "description": "A JSON array of all unique strata plan codes identified within the email content.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "aiSummary": {
+          "type": "string",
+          "description": "A JSON string containing the AI-generated summary of the notice, including 'what', 'when', 'impact', and 'action'."
+        },
+        "audience": {
+          "type": "string",
+          "description": "A JSON string containing the AI-generated audience analysis, including 'decision', 'confidence', 'evidence', and 'target_hints'."
+        },
+        "attachmentIds": {
+          "type": "array",
+          "description": "References to Attachment entities storing metadata for attachments associated with this notice. (Relationship: StrataNotice 1:N Attachment)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assignedOwnerId": {
+          "type": "string",
+          "description": "Reference to an Owner entity if the notice was dispatched to a single owner. (Relationship: Owner 1:N StrataNotice)"
+        },
+        "assignedOwnerIds": {
+          "type": "array",
+          "description": "References to Owner entities if the notice was dispatched to multiple owners. (Relationship: Owner N:N StrataNotice)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "subject",
+        "sender",
+        "receivedAt",
+        "content",
+        "html",
+        "status",
+        "planCode",
+        "allPlanCodes",
+        "attachmentIds"
+      ]
+    },
+    "Owner": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Owner",
+      "type": "object",
+      "description": "Represents an owner of one or more properties, used for targeted notice dispatch.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Owner entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The full name of the property owner."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the property owner.",
+          "format": "email"
+        },
+        "properties": {
+          "type": "array",
+          "description": "A JSON array of strings, where each string represents a property owned by this person (e.g., 'strataPlanCode - unit').",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "properties"
+      ]
+    },
+    "Property": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Property",
+      "type": "object",
+      "description": "Represents a specific property unit, detailing its address and associated strata plan information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Property entity."
+        },
+        "propertyName": {
+          "type": "string",
+          "description": "A descriptive name for the property, as provided in the CSV import."
+        },
+        "address1": {
+          "type": "string",
+          "description": "The primary street address of the property."
+        },
+        "city": {
+          "type": "string",
+          "description": "The city where the property is located."
+        },
+        "state": {
+          "type": "string",
+          "description": "The state or province where the property is located."
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "The postal or zip code of the property."
+        },
+        "strataPlanCode": {
+          "type": "string",
+          "description": "The strata plan code associated with this property."
+        },
+        "unitNumber": {
+          "type": "string",
+          "description": "The unit number within the strata plan for this property."
+        }
+      },
+      "required": [
+        "id",
+        "propertyName",
+        "address1",
+        "city",
+        "state",
+        "postalCode",
+        "strataPlanCode",
+        "unitNumber"
+      ]
+    },
+    "SyncLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SyncLog",
+      "type": "object",
+      "description": "Records the history and outcome of Gmail synchronization operations.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SyncLog entry."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the synchronization operation occurred.",
+          "format": "date-time"
+        },
+        "window": {
+          "type": "number",
+          "description": "The number of days back from the current date that emails were searched."
+        },
+        "status": {
+          "type": "string",
+          "description": "The outcome status of the synchronization operation. (Enum: 'success', 'fail')"
+        },
+        "foundCount": {
+          "type": "number",
+          "description": "The total number of emails found during the sync window."
+        },
+        "insertedCount": {
+          "type": "number",
+          "description": "The number of new StrataNotice entities successfully inserted into the database."
+        },
+        "skippedCount": {
+          "type": "number",
+          "description": "The number of emails skipped due to being duplicates or other filters."
+        },
+        "matchedCount": {
+          "type": "number",
+          "description": "The number of emails that matched at least one strata plan code and were considered for insertion."
+        },
+        "errorMessage": {
+          "type": "string",
+          "description": "An error message, if the synchronization operation failed."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "window",
+        "status",
+        "foundCount",
+        "insertedCount",
+        "skippedCount",
+        "matchedCount"
+      ]
+    },
+    "Attachment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Attachment",
+      "type": "object",
+      "description": "Stores metadata for an attachment associated with a StrataNotice.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Attachment metadata entity."
+        },
+        "noticeId": {
+          "type": "string",
+          "description": "Reference to the StrataNotice entity this attachment belongs to. (Relationship: StrataNotice 1:N Attachment)"
+        },
+        "filename": {
+          "type": "string",
+          "description": "The original filename of the attachment."
+        },
+        "contentType": {
+          "type": "string",
+          "description": "The MIME type of the attachment (e.g., 'application/pdf', 'image/jpeg')."
+        },
+        "size": {
+          "type": "number",
+          "description": "The size of the attachment in bytes."
+        }
+      },
+      "required": [
+        "id",
+        "noticeId",
+        "filename",
+        "contentType",
+        "size"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "adminRole",
+          "schema": {
+            "$ref": "#/backend/entities/adminRole"
+          },
+          "description": "Auxiliary collection to define administrators of the application. A document's ID corresponds to a Firebase user's UID, granting them administrative privileges. This is for DBAC (Database Access Control) and enables Authorization Independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique Firebase Authentication UID of the administrator."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/strataNotices/{noticeId}",
+        "definition": {
+          "entityName": "StrataNotice",
+          "schema": {
+            "$ref": "#/backend/entities/StrataNotice"
+          },
+          "description": "Main collection for all ingested and processed strata notices. All documents are accessible to authenticated administrators. Supports queries for Inbox, Sent History, and search features.",
+          "params": [
+            {
+              "name": "noticeId",
+              "description": "The unique identifier for the StrataNotice entity."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/owners/{ownerId}",
+        "definition": {
+          "entityName": "Owner",
+          "schema": {
+            "$ref": "#/backend/entities/Owner"
+          },
+          "description": "Master data collection for property owners. All documents are accessible to authenticated administrators, used for targeted notice dispatch.",
+          "params": [
+            {
+              "name": "ownerId",
+              "description": "The unique identifier for the Owner entity."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/properties/{propertyId}",
+        "definition": {
+          "entityName": "Property",
+          "schema": {
+            "$ref": "#/backend/entities/Property"
+          },
+          "description": "Master data collection for individual property units. All documents are accessible to authenticated administrators, providing details for strata plan information.",
+          "params": [
+            {
+              "name": "propertyId",
+              "description": "The unique identifier for the Property entity."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/syncLogs/{logId}",
+        "definition": {
+          "entityName": "SyncLog",
+          "schema": {
+            "$ref": "#/backend/entities/SyncLog"
+          },
+          "description": "Records the history and outcome of Gmail synchronization operations. All documents are accessible to authenticated administrators for system monitoring.",
+          "params": [
+            {
+              "name": "logId",
+              "description": "The unique identifier for the SyncLog entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/attachments/{attachmentId}",
+        "definition": {
+          "entityName": "Attachment",
+          "schema": {
+            "$ref": "#/backend/entities/Attachment"
+          },
+          "description": "Stores metadata for attachments associated with a StrataNotice. Includes denormalized 'noticeId' for linking. All documents are accessible to authenticated administrators, supporting direct retrieval via API.",
+          "params": [
+            {
+              "name": "attachmentId",
+              "description": "The unique identifier for the Attachment metadata entity."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for StrataPulse Pro is designed around an 'admin-centric' authorization model, prioritizing Authorization Independence and efficient QAPs (Queries as Permissions). All core business entities—StrataNotice, Owner, Property, Attachment, and SyncLog—are placed in top-level collections.\n\nAuthorization Independence is achieved by centralizing the administrative role check. We assume that any authenticated user of the StrataPulse Pro application is either an administrator or has no access to the core business data. An auxiliary collection, '/roles_admin/{uid}', is introduced to explicitly mark user UIDs as administrators. This means that access to '/strataNotices', '/owners', '/properties', '/attachments', and '/syncLogs' is primarily gated by checking if 'request.auth.uid' corresponds to an existing document in '/roles_admin'. This strategy eliminates the need for complex, performance-impacting 'get()' operations in security rules to check for ownership or membership on a per-document basis for application users. The 'assignedOwnerId'/'assignedOwnerIds' in StrataNotice and 'noticeId' in Attachment are used for data relationships and application logic, not for granular Firebase Security Rules authorization checks for the application's users.\n\nQAPs (Queries as Permissions) are inherently supported by this structure. Since all documents within each collection share the same security posture (admin-level access), `list` operations become straightforward and secure. For example, an authenticated administrator can query '/strataNotices' and apply filters on data attributes like 'status' (e.g., 'New', 'Ready', 'Dispatched'), 'planCode', or 'receivedAt' directly. The security rules only need to verify the user's 'admin' status, allowing the database to efficiently serve filtered results without the rules attempting to filter data themselves. This ensures that a query always returns only the data the user is authorized to see, making the intention clear and debugging simple. Structural Segregation is applied by keeping distinct logical entities in separate collections, maintaining homogeneous security requirements within each collection."
+  }
+}
