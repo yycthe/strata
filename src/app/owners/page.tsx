@@ -1,6 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getOwners } from '@/lib/data';
+import { OwnersClient } from '@/components/owners/owners-client';
 
-export default function OwnersPage() {
+export default async function OwnersPage() {
+  const owners = await getOwners();
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
@@ -8,14 +11,7 @@ export default function OwnersPage() {
           Owners
         </h1>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Owners</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Coming soon...</p>
-        </CardContent>
-      </Card>
+      <OwnersClient owners={owners} />
     </div>
   );
 }

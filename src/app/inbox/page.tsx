@@ -1,6 +1,10 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getNotices } from '@/lib/data';
+import { InboxClient } from '@/components/inbox/inbox-client';
 
-export default function InboxPage() {
+export default async function InboxPage() {
+  // Fetch notices for the inbox queue
+  const notices = await getNotices({ status: ['New', 'Ready', 'Review'] });
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
@@ -8,14 +12,7 @@ export default function InboxPage() {
           Inbox Queue
         </h1>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Notices</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Coming soon...</p>
-        </CardContent>
-      </Card>
+      <InboxClient notices={notices} />
     </div>
   );
 }
