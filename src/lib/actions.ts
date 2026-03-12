@@ -53,6 +53,15 @@ export async function syncGmail(
   prevState: SyncResult | undefined,
   formData: FormData
 ): Promise<SyncResult> {
+
+  // Validate environment variables first
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    return {
+      status: 'error',
+      message: 'Gmail credentials are not configured in the .env file. Please add GMAIL_USER and GMAIL_APP_PASSWORD.',
+    };
+  }
+
   const validatedFields = syncGmailSchema.safeParse({
     daysBack: Number(formData.get('daysBack')),
   });
@@ -73,8 +82,8 @@ export async function syncGmail(
     port: 993,
     secure: true,
     auth: {
-      user: process.env.GMAIL_USER!,
-      pass: process.env.GMAIL_APP_PASSWORD!,
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
     },
     logger: false, // Set to true for detailed IMAP logs
   });
@@ -168,6 +177,10 @@ export async function syncGmail(
 export async function runAiTriage(noticeId: string, content: string) {
   if (!content) {
     throw new Error('Notice content is empty, cannot run AI triage.');
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured in the .env file.');
   }
 
   try {
