@@ -30,6 +30,12 @@ function mapToNotice(row: any): StrataNotice {
     };
 }
 
+export async function getNoticeById(id: string): Promise<StrataNotice | null> {
+    const stmt = db.prepare('SELECT * FROM notices WHERE id = ?');
+    const row = stmt.get(id);
+    return row ? mapToNotice(row) : null;
+}
+
 export async function getNotices(options: {
     status?: StrataNotice['status'][];
     query?: string;

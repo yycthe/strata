@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-
+import Link from 'next/link';
 import { MoreHorizontal, Trash2, Zap } from 'lucide-react';
 import { deleteNotices, runAiTriage } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -147,7 +147,7 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
             </TableHeader>
             <TableBody>
               {notices.map((notice) => (
-                <TableRow key={notice.id} data-state={selectedRows.includes(notice.id) ? "selected" : undefined}>
+                <TableRow key={notice.id}>
                   <TableCell>
                     <Checkbox
                       checked={selectedRows.includes(notice.id)}
@@ -155,7 +155,11 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
                     />
                   </TableCell>
                   <TableCell><StatusBadge status={notice.status} /></TableCell>
-                  <TableCell className="font-medium">{notice.subject}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/inbox/${notice.id}`} className="hover:underline">
+                      {notice.subject}
+                    </Link>
+                  </TableCell>
                   <TableCell>{notice.sender}</TableCell>
                   <TableCell suppressHydrationWarning>{new Date(notice.receivedAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
