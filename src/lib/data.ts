@@ -30,16 +30,6 @@ function mapToNotice(row: any): StrataNotice {
     };
 }
 
-function mapToOwner(row: any): Owner {
-    return {
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        properties: safeJsonParse<string[]>(row.properties, []),
-    };
-}
-
-
 export async function getNotices(options: {
     status?: StrataNotice['status'][];
     query?: string;
@@ -85,12 +75,6 @@ export async function getNoticesCount(status?: StrataNotice['status'][]): Promis
     return result.count;
 }
 
-export async function getOwnersCount(): Promise<number> {
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM owners');
-    const result = stmt.get() as { count: number };
-    return result.count;
-}
-
 export async function getLastSyncStatus(): Promise<SyncLog | null> {
     const stmt = db.prepare('SELECT * FROM sync_logs ORDER BY timestamp DESC LIMIT 1');
     const row = stmt.get();
@@ -102,25 +86,6 @@ export async function getSyncLogs(): Promise<SyncLog[]> {
     const rows = stmt.all();
     return rows as SyncLog[];
 }
-
-export async function getOwners(planCode?: string): Promise<Owner[]> {
-    let query = 'SELECT * FROM owners';
-    const params: string[] = [];
-
-    if (planCode) {
-        query += ' WHERE json_each.value LIKE ? ORDER BY CASE WHEN json_each.value LIKE ? THEN 0 ELSE 1 END, name ASC';
-        params.push(`%${planCode}%`, `%${planCode}%`);
-        query = 'SELECT o.* FROM owners o, json_each(o.properties) WHERE json_each.value LIKE ? ORDER BY o.name ASC';
-        params.push(`%${planCode}%`);
-    } else {
-        query += ' ORDER BY name ASC';
-    }
-    
-    const stmt = db.prepare(query);
-    const rows = stmt.all(...params);
-    return rows.map(mapToOwner);
-}
-
 
 export async function getProperties(): Promise<Property[]> {
     const stmt = db.prepare('SELECT * FROM properties ORDER BY name ASC');

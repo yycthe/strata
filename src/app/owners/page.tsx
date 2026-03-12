@@ -1,9 +1,8 @@
-import { getOwners } from '@/lib/data';
+'use client';
+
 import { OwnersClient } from '@/components/owners/owners-client';
 
-export default async function OwnersPage() {
-  const owners = await getOwners();
-
+export default function OwnersPage() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
@@ -11,7 +10,7 @@ export default async function OwnersPage() {
           Owners
         </h1>
       </div>
-      <OwnersClient owners={owners} />
+      <OwnersClient />
     </div>
   );
 }
