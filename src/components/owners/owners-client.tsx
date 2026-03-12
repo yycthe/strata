@@ -29,20 +29,20 @@ export function OwnersClient() {
   const [csvData, setCsvData] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
 
   const ownersCollection = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'owners') : null),
-    [firestore]
+    () => (firestore && user ? collection(firestore, 'owners') : null),
+    [firestore, user]
   );
   const { data: owners, isLoading } = useCollection<Owner>(ownersCollection);
 
   const handleImport = async () => {
-    if (!csvData.trim() || !firestore) {
+    if (!csvData.trim() || !firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: csvData.trim() ? 'Firestore not available.' : 'CSV data cannot be empty.',
+        description: !user ? 'You must be logged in to import owners.' : (csvData.trim() ? 'Firestore not available.' : 'CSV data cannot be empty.'),
       });
       return;
     }
@@ -121,7 +121,7 @@ export function OwnersClient() {
           <CardTitle>All Owners</CardTitle>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={!user}>
                 <Upload className="mr-2 h-4 w-4" /> Import from CSV
               </Button>
             </DialogTrigger>
@@ -174,7 +174,7 @@ export function OwnersClient() {
             {!isLoading && (!owners || owners.length === 0) && (
                 <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground">
-                        No owners found in Firestore. Try importing some from a CSV file.
+                        { user ? 'No owners found in Firestore. Try importing some from a CSV file.' : 'Please log in to view owners.' }
                     </TableCell>
                 </TableRow>
             )}

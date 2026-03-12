@@ -17,11 +17,11 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ initialStats }: DashboardClientProps) {
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
 
   const ownersQuery = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'owners') : null),
-    [firestore]
+    () => (firestore && user ? collection(firestore, 'owners') : null),
+    [firestore, user]
   );
   const { data: ownersData } = useCollection(ownersQuery);
   const ownersCount = ownersData?.length ?? 0;
