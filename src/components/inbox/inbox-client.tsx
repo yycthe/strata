@@ -157,7 +157,7 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
                   <TableCell><StatusBadge status={notice.status} /></TableCell>
                   <TableCell className="font-medium">{notice.subject}</TableCell>
                   <TableCell>{notice.sender}</TableCell>
-                  <TableCell>{new Date(notice.receivedAt).toLocaleDateString()}</TableCell>
+                  <TableCell suppressHydrationWarning>{new Date(notice.receivedAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

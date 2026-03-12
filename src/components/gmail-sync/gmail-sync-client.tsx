@@ -95,7 +95,7 @@ export function GmailSyncClient({ logs }: { logs: SyncLog[] }) {
               <TableBody>
                 {logs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                    <TableCell suppressHydrationWarning>{new Date(log.timestamp).toLocaleString()}</TableCell>
                     <TableCell>{log.status}</TableCell>
                     <TableCell>{log.found}</TableCell>
                     <TableCell>{log.inserted}</TableCell>

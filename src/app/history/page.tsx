@@ -35,7 +35,7 @@ export default async function HistoryPage() {
                     {notice.assignedOwnerId ? `Owner ID: ${notice.assignedOwnerId}` : ''}
                     {notice.assignedOwnerIds && notice.assignedOwnerIds.length > 0 ? `Owner IDs: ${notice.assignedOwnerIds.join(', ')}` : ''}
                   </TableCell>
-                  <TableCell>
+                  <TableCell suppressHydrationWarning>
                     {/* The DB doesn't have a dispatchedAt field, we use receivedAt as a proxy */}
                     {new Date(notice.receivedAt).toLocaleString()}
                   </TableCell>

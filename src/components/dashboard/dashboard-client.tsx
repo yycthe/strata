@@ -79,7 +79,7 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
           <CardContent className="space-y-4">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Time</span>
-              <span className="font-medium">{syncTime}</span>
+              <span className="font-medium" suppressHydrationWarning>{syncTime}</span>
             </div>
             <Separator />
             <div className="flex justify-between">
