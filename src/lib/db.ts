@@ -26,15 +26,8 @@ const createTables = () => {
       aiSummary TEXT,
       audience TEXT,
       attachments TEXT,
-      assignedOwnerId INTEGER,
+      assignedOwnerId TEXT,
       assignedOwnerIds TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS owners (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      properties TEXT
     );
 
     CREATE TABLE IF NOT EXISTS properties (

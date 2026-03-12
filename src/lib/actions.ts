@@ -2,12 +2,12 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import db from './db';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categorize-notice-flow';
 import type { SyncResult } from './definitions';
-import Papa from 'papaparse';
 
 // --- Text Cleaning and Matching ---
 
@@ -92,7 +92,7 @@ export async function syncGmail(
   const logInfo = {
     timestamp: new Date().toISOString(),
     window: daysBack,
-    status: 'success',
+    status: 'success' as 'success' | 'fail',
     error: null as string | null,
   };
 
@@ -191,13 +191,14 @@ export async function runAiTriage(noticeId: string, content: string) {
     ).run(JSON.stringify(result.summary), JSON.stringify(result.audience), noticeId);
 
     revalidatePath('/inbox');
-    revalidatePath('/history');
+    revalidatePath(`/inbox/${noticeId}`);
     return { success: true, message: 'AI Triage completed successfully.' };
   } catch (err: any) {
     console.error('AI Triage failed:', err);
     // Optionally update status to 'Review' on failure
     db.prepare(`UPDATE notices SET status = 'Review' WHERE id = ?`).run(noticeId);
     revalidatePath('/inbox');
+    revalidatePath(`/inbox/${noticeId}`);
     throw new Error(`AI Triage failed: ${err.message}`);
   }
 }
@@ -216,14 +217,29 @@ export async function deleteNotices(ids: string[]) {
   revalidatePath('/history');
 }
 
-export async function dispatchNotice(noticeId: string, ownerId: number) {
+export async function deleteSingleNotice(id: string) {
+  db.prepare('DELETE FROM notices WHERE id = ?').run(id);
+  revalidatePath('/inbox');
+  revalidatePath('/history');
+  redirect('/inbox');
+}
+
+export async function markNoticeAsIgnored(id: string) {
+  db.prepare(`UPDATE notices SET status = 'Ignored' WHERE id = ?`).run(id);
+  revalidatePath('/inbox');
+  revalidatePath(`/inbox/${id}`);
+}
+
+export async function dispatchNotice(noticeId: string, ownerId: string) {
     db.prepare(`UPDATE notices SET status = 'Dispatched', assignedOwnerId = ? WHERE id = ?`).run(ownerId, noticeId);
     revalidatePath('/inbox');
+    revalidatePath(`/inbox/${noticeId}`);
     revalidatePath('/history');
 }
 
-export async function dispatchGroupNotice(noticeId: string, ownerIds: number[]) {
+export async function dispatchGroupNotice(noticeId: string, ownerIds: string[]) {
     db.prepare(`UPDATE notices SET status = 'Dispatched', assignedOwnerIds = ? WHERE id = ?`).run(JSON.stringify(ownerIds), noticeId);
     revalidatePath('/inbox');
+    revalidatePath(`/inbox/${noticeId}`);
     revalidatePath('/history');
 }

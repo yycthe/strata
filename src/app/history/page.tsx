@@ -33,7 +33,7 @@ export default async function HistoryPage() {
                   <TableCell>{notice.subject}</TableCell>
                   <TableCell>
                     {notice.assignedOwnerId ? `Owner ID: ${notice.assignedOwnerId}` : ''}
-                    {notice.assignedOwnerIds && notice.assignedOwnerIds.length > 0 ? `Owner IDs: ${notice.assignedOwnerIds.join(', ')}` : ''}
+                    {notice.assignedOwnerIds && notice.assignedOwnerIds.length > 0 ? `${notice.assignedOwnerIds.length} owners` : ''}
                   </TableCell>
                   <TableCell suppressHydrationWarning>
                     {/* The DB doesn't have a dispatchedAt field, we use receivedAt as a proxy */}

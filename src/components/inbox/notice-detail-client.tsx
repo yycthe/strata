@@ -1,6 +1,8 @@
 'use client';
 
-import type { StrataNotice, AISummary, Audience } from '@/lib/definitions';
+import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import type { StrataNotice, AISummary, Audience, Owner } from '@/lib/definitions';
 import {
   Card,
   CardContent,
@@ -8,11 +10,27 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Bot, CheckCircle, Target } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle, Target, Trash2 } from 'lucide-react';
+import { useFirebase, useCollection, useMemoFirebase, WithId } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
+
 
 function StatusBadge({ status }: { status: StrataNotice['status'] }) {
   const variant = {
@@ -23,7 +41,11 @@ function StatusBadge({ status }: { status: StrataNotice['status'] }) {
     Ignored: 'outline',
   }[status] as 'default' | 'secondary' | 'destructive' | 'outline';
 
-  const colorClass = status === 'Ready' ? 'bg-green-500 hover:bg-green-600' : '';
+  const colorClass = {
+    Ready: 'bg-green-500 hover:bg-green-600',
+    Dispatched: 'bg-blue-500 hover:bg-blue-600',
+    Ignored: 'bg-gray-500 hover:bg-gray-600',
+  }[status];
 
   return (
     <Badge variant={variant} className={colorClass}>
@@ -143,7 +165,134 @@ function AudienceCard({ audience }: { audience: Audience | null }) {
     );
 }
 
+function findRecommendedOwners(notice: StrataNotice, allOwners: WithId<Owner>[] | null): WithId<Owner>[] {
+  if (!notice.audience || !allOwners) {
+    return [];
+  }
+
+  const { decision, target_hints } = notice.audience;
+
+  if (decision === 'BROADCAST' || decision === 'REVIEW' || decision === 'DIRECT') {
+    return allOwners;
+  }
+
+  if (decision === 'TARGETED') {
+    const hints = [
+      ...target_hints.units,
+      ...target_hints.strata_lots,
+      ...target_hints.parking,
+      ...target_hints.locker,
+    ].filter(Boolean).map(h => h.toLowerCase());
+
+    if (hints.length === 0) return allOwners; // Fallback to all if no hints
+
+    const noticePlanCode = notice.planCode?.toLowerCase();
+
+    return allOwners.filter(owner => {
+      return owner.properties.some(property => {
+        const lowerCaseProperty = property.toLowerCase();
+        const propertyIncludesPlanCode = noticePlanCode ? lowerCaseProperty.includes(noticePlanCode) : true;
+        if (!propertyIncludesPlanCode) return false;
+
+        return hints.some(hint => lowerCaseProperty.includes(hint));
+      });
+    });
+  }
+
+  return [];
+}
+
+function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice: StrataNotice; owners: WithId<Owner>[]; onDispatch: () => void; isDispatching: boolean; }) {
+    return (
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Confirm Notice Dispatch</DialogTitle>
+                <DialogDescription>
+                    Review the recommended recipients based on the AI analysis. The notice will be marked as dispatched to these owners.
+                </DialogDescription>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+                AI Recommendation: <Badge variant="outline">{notice.audience?.decision || 'N/A'}</Badge>
+            </p>
+            <Card>
+                <CardContent className="pt-6">
+                    <ScrollArea className="h-64">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {owners.map(owner => (
+                                <TableRow key={owner.id}>
+                                    <TableCell>{owner.name}</TableCell>
+                                    <TableCell>{owner.email}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={onDispatch} disabled={isDispatching}>
+                    {isDispatching ? 'Dispatching...' : `Confirm & Dispatch to ${owners.length} Owners`}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    );
+}
+
+
 export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const router = useRouter();
+  const { firestore, user } = useFirebase();
+
+  const ownersQuery = useMemoFirebase(
+    () => (firestore && user ? collection(firestore, 'owners') : null),
+    [firestore, user]
+  );
+  const { data: allOwners } = useCollection<Owner>(ownersQuery);
+
+  const recommendedOwners = useMemo(() => findRecommendedOwners(notice, allOwners), [notice, allOwners]);
+
+  const isActionable = notice.status === 'New' || notice.status === 'Ready' || notice.status === 'Review';
+
+  const handleDispatch = () => {
+    if (recommendedOwners.length === 0) {
+      toast({ variant: 'destructive', title: 'No recipients found', description: 'Cannot dispatch notice to zero owners.' });
+      return;
+    }
+    startTransition(async () => {
+      const ownerIds = recommendedOwners.map(o => o.id);
+      await dispatchGroupNotice(notice.id, ownerIds);
+      toast({ title: 'Notice Dispatched', description: `Notice has been dispatched to ${ownerIds.length} owners.` });
+    });
+  };
+
+  const handleIgnore = () => {
+    startTransition(async () => {
+      await markNoticeAsIgnored(notice.id);
+      toast({ title: 'Notice Ignored' });
+    });
+  }
+
+  const handleDelete = () => {
+    startTransition(async () => {
+      await deleteSingleNotice(notice.id);
+      toast({ title: 'Notice Deleted' });
+      // router.push('/inbox') is handled by redirect in server action
+    });
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
@@ -166,9 +315,39 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                 </CardContent>
             </Card>
             <div className="flex gap-4">
-                <Button>Dispatch Notice</Button>
-                <Button variant="secondary">Mark as Ignored</Button>
-                <Button variant="destructive">Delete</Button>
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button disabled={!isActionable || isPending || !allOwners}>Dispatch Notice</Button>
+                    </DialogTrigger>
+                    {allOwners && (
+                        <DispatchDialog 
+                            notice={notice} 
+                            owners={recommendedOwners}
+                            onDispatch={handleDispatch}
+                            isDispatching={isPending}
+                        />
+                    )}
+                </Dialog>
+                
+                <Button variant="secondary" onClick={handleIgnore} disabled={!isActionable || isPending}>Mark as Ignored</Button>
+                
+                <Dialog>
+                    <DialogTrigger asChild>
+                         <Button variant="destructive" disabled={isPending}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Are you sure you want to delete this notice?</DialogTitle>
+                            <DialogDescription>This action cannot be undone.</DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                            <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+                                {isPending ? 'Deleting...' : 'Confirm Delete'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
 

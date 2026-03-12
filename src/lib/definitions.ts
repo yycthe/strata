@@ -10,12 +10,11 @@ export type StrataNotice = {
   aiSummary: AISummary | null;
   audience: Audience | null;
   attachments: Attachment[];
-  assignedOwnerId: number | null;
-  assignedOwnerIds: number[] | null;
+  assignedOwnerId: string | null;
+  assignedOwnerIds: string[] | null;
 };
 
 export type Owner = {
-  id: number;
   name: string;
   email: string;
   properties: string[]; // e.g., ["BCS-1234 - 101", "EPS-5678 - 202"]
