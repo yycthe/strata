@@ -71,6 +71,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "ownerMessage": {
+          "type": "string",
+          "description": "The AI-generated, owner-facing message derived from the AI summary, ready for dispatch."
         }
       },
       "required": [

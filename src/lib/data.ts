@@ -26,7 +26,8 @@ function mapToNotice(row: any): StrataNotice {
         audience: safeJsonParse(row.audience, null),
         attachments: safeJsonParse(row.attachments, []),
         assignedOwnerId: row.assignedOwnerId,
-        assignedOwnerIds: safeJsonParse<number[]>(row.assignedOwnerIds, []),
+        assignedOwnerIds: safeJsonParse<string[]>(row.assignedOwnerIds, []),
+        ownerMessage: row.ownerMessage || null,
     };
 }
 

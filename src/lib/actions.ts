@@ -7,7 +7,19 @@ import db from './db';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categorize-notice-flow';
+import { generateOwnerMessage } from '@/ai/flows/generate-owner-message-flow';
 import type { SyncResult } from './definitions';
+
+// A helper to safely parse JSON from the database.
+function safeJsonParse<T>(jsonString: string | null | undefined, defaultValue: T): T {
+  if (!jsonString) return defaultValue;
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch (e) {
+    console.error('Failed to parse JSON:', e);
+    return defaultValue;
+  }
+}
 
 // --- Text Cleaning and Matching ---
 
@@ -172,7 +184,7 @@ export async function syncGmail(
 }
 
 
-// --- AI TRIAGE ACTION ---
+// --- AI ACTIONS ---
 
 export async function runAiTriage(noticeId: string, content: string) {
   if (!content) {
@@ -200,6 +212,37 @@ export async function runAiTriage(noticeId: string, content: string) {
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     throw new Error(`AI Triage failed: ${err.message}`);
+  }
+}
+
+export async function generateAndSaveOwnerMessage(noticeId: string) {
+  const notice = db.prepare('SELECT id, aiSummary FROM notices WHERE id = ?').get(noticeId) as { id: string, aiSummary: string };
+
+  if (!notice) {
+    throw new Error('Notice not found.');
+  }
+
+  const summary = safeJsonParse(notice.aiSummary, null);
+
+  if (!summary) {
+    throw new Error('AI Summary is not available for this notice. Cannot generate message.');
+  }
+  
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured in the .env file.');
+  }
+
+  try {
+    const message = await generateOwnerMessage(summary);
+
+    db.prepare('UPDATE notices SET ownerMessage = ? WHERE id = ?').run(message, noticeId);
+
+    revalidatePath(`/inbox/${noticeId}`);
+    return { success: true, message };
+
+  } catch (err: any) {
+    console.error('Owner message generation failed:', err);
+    throw new Error(`Failed to generate owner message: ${err.message}`);
   }
 }
 

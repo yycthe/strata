@@ -12,6 +12,7 @@ export type StrataNotice = {
   attachments: Attachment[];
   assignedOwnerId: string | null;
   assignedOwnerIds: string[] | null;
+  ownerMessage: string | null;
 };
 
 export type Owner = {

@@ -28,7 +28,7 @@ import { AlertCircle, Bot, CheckCircle, Target, Trash2 } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, WithId } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice } from '@/lib/actions';
+import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice, generateAndSaveOwnerMessage } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -121,7 +121,7 @@ function AudienceCard({ audience }: { audience: Audience | null }) {
         ...audience.target_hints.strata_lots, 
         ...audience.target_hints.parking, 
         ...audience.target_hints.locker
-    ];
+    ].filter(Boolean);
 
     return (
         <Card>
@@ -202,46 +202,63 @@ function findRecommendedOwners(notice: StrataNotice, allOwners: WithId<Owner>[] 
   return [];
 }
 
-function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice: StrataNotice; owners: WithId<Owner>[]; onDispatch: () => void; isDispatching: boolean; }) {
+function DispatchDialog({ notice, owners, onDispatch, isDispatching, generatedMessage, isGenerating }: { notice: StrataNotice; owners: WithId<Owner>[]; onDispatch: () => void; isDispatching: boolean; generatedMessage: string | null, isGenerating: boolean }) {
     return (
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
             <DialogHeader>
                 <DialogTitle>Confirm Notice Dispatch</DialogTitle>
                 <DialogDescription>
-                    Review the recommended recipients based on the AI analysis. The notice will be marked as dispatched to these owners.
+                    Review the recommended recipients and the AI-generated message. The notice will be marked as dispatched.
                 </DialogDescription>
             </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-                AI Recommendation: <Badge variant="outline">{notice.audience?.decision || 'N/A'}</Badge>
-            </p>
-            <Card>
-                <CardContent className="pt-6">
-                    <ScrollArea className="h-64">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Email</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {owners.map(owner => (
-                                <TableRow key={owner.id}>
-                                    <TableCell>{owner.name}</TableCell>
-                                    <TableCell>{owner.email}</TableCell>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium">Message to Owners</p>
+                 <div className="rounded-md border p-4 mt-2 min-h-[250px]">
+                    {isGenerating && <p className="text-muted-foreground animate-pulse">Generating message from AI summary...</p>}
+                    {!isGenerating && generatedMessage && (
+                      <ScrollArea className="h-64">
+                        <pre className="whitespace-pre-wrap text-sm font-sans">{generatedMessage}</pre>
+                      </ScrollArea>
+                    )}
+                    {!isGenerating && !generatedMessage && <p className="text-muted-foreground">Could not generate or find a message. Ensure an AI summary exists.</p>}
+                  </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium">
+                    Recipients ({owners.length})
+                </p>
+                <Card className="mt-2">
+                    <CardContent className="p-0">
+                        <ScrollArea className="h-72">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Email</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
+                            </TableHeader>
+                            <TableBody>
+                                {owners.map(owner => (
+                                    <TableRow key={owner.id}>
+                                        <TableCell>{owner.name}</TableCell>
+                                        <TableCell>{owner.email}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+              </div>
+            </div>
 
             <DialogFooter>
                 <DialogClose asChild>
                     <Button variant="outline">Cancel</Button>
                 </DialogClose>
-                <Button onClick={onDispatch} disabled={isDispatching}>
+                <Button onClick={onDispatch} disabled={isDispatching || isGenerating || !generatedMessage}>
                     {isDispatching ? 'Dispatching...' : `Confirm & Dispatch to ${owners.length} Owners`}
                 </Button>
             </DialogFooter>
@@ -252,9 +269,13 @@ function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice:
 
 export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
   const [isPending, startTransition] = useTransition();
+  const [isGenerating, startGenerating] = useTransition();
   const { toast } = useToast();
-  const router = useRouter();
   const { firestore, user } = useFirebase();
+
+  const [isDispatchDialogOpen, setIsDispatchDialogOpen] = useState(false);
+  const [generatedMessage, setGeneratedMessage] = useState<string | null>(notice.ownerMessage);
+
 
   const ownersQuery = useMemoFirebase(
     () => (firestore && user ? collection(firestore, 'owners') : null),
@@ -266,6 +287,26 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
 
   const isActionable = notice.status === 'New' || notice.status === 'Ready' || notice.status === 'Review';
 
+  const handleOpenDispatchDialog = () => {
+    setIsDispatchDialogOpen(true);
+    // If we don't have a message but have a summary, generate one.
+    if (!generatedMessage && notice.aiSummary) {
+      startGenerating(async () => {
+        try {
+          const result = await generateAndSaveOwnerMessage(notice.id);
+          setGeneratedMessage(result.message);
+        } catch (error: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Message Generation Failed',
+            description: error.message,
+          });
+          setGeneratedMessage(null); // Clear on failure
+        }
+      });
+    }
+  };
+
   const handleDispatch = () => {
     if (recommendedOwners.length === 0) {
       toast({ variant: 'destructive', title: 'No recipients found', description: 'Cannot dispatch notice to zero owners.' });
@@ -274,6 +315,7 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
     startTransition(async () => {
       const ownerIds = recommendedOwners.map(o => o.id);
       await dispatchGroupNotice(notice.id, ownerIds);
+      setIsDispatchDialogOpen(false); // Close dialog on success
       toast({ title: 'Notice Dispatched', description: `Notice has been dispatched to ${ownerIds.length} owners.` });
     });
   };
@@ -315,9 +357,9 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                 </CardContent>
             </Card>
             <div className="flex gap-4">
-                <Dialog>
+                <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button disabled={!isActionable || isPending || !allOwners}>Dispatch Notice</Button>
+                        <Button onClick={handleOpenDispatchDialog} disabled={!isActionable || isPending || !allOwners || !notice.aiSummary}>Dispatch Notice</Button>
                     </DialogTrigger>
                     {allOwners && (
                         <DispatchDialog 
@@ -325,6 +367,8 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                             owners={recommendedOwners}
                             onDispatch={handleDispatch}
                             isDispatching={isPending}
+                            generatedMessage={generatedMessage}
+                            isGenerating={isGenerating}
                         />
                     )}
                 </Dialog>

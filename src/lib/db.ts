@@ -27,7 +27,8 @@ const createTables = () => {
       audience TEXT,
       attachments TEXT,
       assignedOwnerId TEXT,
-      assignedOwnerIds TEXT
+      assignedOwnerIds TEXT,
+      ownerMessage TEXT
     );
 
     CREATE TABLE IF NOT EXISTS properties (
