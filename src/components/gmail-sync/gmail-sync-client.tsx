@@ -1,5 +1,6 @@
 'use client';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { syncGmail } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +26,7 @@ function SubmitButton() {
 }
 
 function SyncForm() {
-  const [state, formAction] = useFormState(syncGmail, initialState);
+  const [state, formAction] = useActionState(syncGmail, initialState);
 
   return (
     <Card>
