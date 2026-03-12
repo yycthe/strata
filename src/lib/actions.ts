@@ -196,11 +196,14 @@ export async function runAiTriage(noticeId: string, content: string) {
   }
 
   try {
-    const result = await summarizeAndCategorizeNotice({ content });
-    
+    const { summary, audience } = await summarizeAndCategorizeNotice({ content });
+
+    // Also generate the owner message from the summary
+    const ownerMessage = await generateOwnerMessage(summary);
+
     db.prepare(
-      `UPDATE notices SET aiSummary = ?, audience = ?, status = 'Ready' WHERE id = ?`
-    ).run(JSON.stringify(result.summary), JSON.stringify(result.audience), noticeId);
+      `UPDATE notices SET aiSummary = ?, audience = ?, ownerMessage = ?, status = 'Ready' WHERE id = ?`
+    ).run(JSON.stringify(summary), JSON.stringify(audience), ownerMessage, noticeId);
 
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
@@ -212,37 +215,6 @@ export async function runAiTriage(noticeId: string, content: string) {
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     throw new Error(`AI Triage failed: ${err.message}`);
-  }
-}
-
-export async function generateAndSaveOwnerMessage(noticeId: string) {
-  const notice = db.prepare('SELECT id, aiSummary FROM notices WHERE id = ?').get(noticeId) as { id: string, aiSummary: string };
-
-  if (!notice) {
-    throw new Error('Notice not found.');
-  }
-
-  const summary = safeJsonParse(notice.aiSummary, null);
-
-  if (!summary) {
-    throw new Error('AI Summary is not available for this notice. Cannot generate message.');
-  }
-  
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('Gemini API key is not configured in the .env file.');
-  }
-
-  try {
-    const message = await generateOwnerMessage(summary);
-
-    db.prepare('UPDATE notices SET ownerMessage = ? WHERE id = ?').run(message, noticeId);
-
-    revalidatePath(`/inbox/${noticeId}`);
-    return { success: true, message };
-
-  } catch (err: any) {
-    console.error('Owner message generation failed:', err);
-    throw new Error(`Failed to generate owner message: ${err.message}`);
   }
 }
 
