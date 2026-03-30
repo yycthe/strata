@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getAdminSession } from '@/lib/admin-session';
 import { attachmentHasStoredContent, isPdfAttachment } from '@/lib/definitions';
 import { readStoredAttachmentContent } from '@/lib/notice-attachments';
 import { getStoredNoticeById } from '@/lib/server-store';
@@ -18,6 +19,12 @@ export async function GET(
       | { noticeId: string; attachmentId: string };
   }
 ) {
+  const session = await getAdminSession();
+
+  if (!session) {
+    return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
+  }
+
   const { noticeId, attachmentId } = await Promise.resolve(context.params);
   const notice = await getStoredNoticeById(noticeId);
 

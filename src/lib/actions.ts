@@ -7,6 +7,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categorize-notice-flow';
 import { generateOwnerMessage } from '@/ai/flows/generate-owner-message-flow';
+import { requireAdminSession } from '@/lib/admin-session';
 import { attachmentHasStoredContent, isPdfAttachment, type SyncResult } from './definitions';
 import { persistParsedAttachment } from './notice-attachments';
 import { extractStrataPlanCodes } from './strata-identifiers';
@@ -70,6 +71,7 @@ export async function syncGmail(
   prevState: SyncResult | undefined,
   formData: FormData
 ): Promise<SyncResult> {
+  await requireAdminSession();
 
   // Validate environment variables first
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
@@ -235,6 +237,8 @@ export async function syncGmail(
 // --- AI ACTIONS ---
 
 export async function runAiTriage(noticeId: string, content: string) {
+  await requireAdminSession();
+
   if (!content) {
     throw new Error('Notice content is empty, cannot run AI triage.');
   }
@@ -273,6 +277,7 @@ export async function runAiTriage(noticeId: string, content: string) {
 // --- NOTICE ACTIONS ---
 
 export async function deleteNotices(ids: string[]) {
+  await requireAdminSession();
   if (ids.length === 0) return;
   await deleteStoredNotices(ids);
   revalidatePath('/inbox');
@@ -280,6 +285,7 @@ export async function deleteNotices(ids: string[]) {
 }
 
 export async function deleteSingleNotice(id: string) {
+  await requireAdminSession();
   await deleteStoredNotice(id);
   revalidatePath('/inbox');
   revalidatePath('/history');
@@ -287,6 +293,7 @@ export async function deleteSingleNotice(id: string) {
 }
 
 export async function markNoticeAsIgnored(id: string) {
+  await requireAdminSession();
   await updateStoredNotice(id, { status: 'Ignored' });
   revalidatePath('/inbox');
   revalidatePath(`/inbox/${id}`);
@@ -296,6 +303,7 @@ export async function dispatchNotice(
   noticeId: string,
   recipient: { id: string; name: string; email: string }
 ) {
+    await requireAdminSession();
     return dispatchGroupNotice(noticeId, [recipient]);
 }
 
@@ -303,6 +311,7 @@ export async function dispatchGroupNotice(
   noticeId: string,
   recipientsInput: Array<{ id: string; name: string; email: string }>
 ) {
+    await requireAdminSession();
     const recipients = dispatchRecipientsSchema.parse(recipientsInput);
     const notice = await getStoredNoticeById(noticeId);
 

@@ -1,10 +1,12 @@
 import { getNotices } from '@/lib/data';
 import { InboxClient } from '@/components/inbox/inbox-client';
 import { isDemoModeEnabled } from '@/lib/demo-session';
+import { requireAdminSession } from '@/lib/admin-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function InboxPage() {
+  await requireAdminSession();
   // Fetch notices for the inbox queue
   const notices = await getNotices({ status: ['New', 'Ready', 'Review'] });
   const demoMode = await isDemoModeEnabled();

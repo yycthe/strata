@@ -3,10 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { StrataNotice } from '@/lib/definitions';
 import { Badge } from '@/components/ui/badge';
+import { requireAdminSession } from '@/lib/admin-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HistoryPage() {
+  await requireAdminSession();
   const notices: StrataNotice[] = await getNotices({ status: ['Dispatched'] });
 
   return (

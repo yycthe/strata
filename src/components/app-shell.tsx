@@ -27,13 +27,13 @@ import { Separator } from '@/components/ui/separator';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { useFirebase } from '@/firebase';
-import {
-  initiateAnonymousSignIn,
-  initiateEmailSignIn,
-} from '@/firebase/non-blocking-login';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  if (pathname.startsWith('/login')) {
+    return <>{children}</>;
+  }
 
   const menuItems = [
     { href: '/', label: 'Overview', icon: LayoutDashboard },
@@ -94,6 +94,7 @@ function AuthStatus() {
   const { auth, user, isUserLoading } = useFirebase();
   const pathname = usePathname();
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     setIsDemoMode(document.cookie.includes('strata_demo_mode=1'));
@@ -121,8 +122,21 @@ function AuthStatus() {
             </Link>
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => auth.signOut()}>
-          Logout
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isSigningOut}
+          onClick={async () => {
+            setIsSigningOut(true);
+            try {
+              await fetch('/api/auth/session', { method: 'DELETE' });
+            } finally {
+              await auth.signOut();
+              window.location.href = '/login';
+            }
+          }}
+        >
+          {isSigningOut ? 'Logging out...' : 'Logout'}
         </Button>
       </div>
     );
@@ -130,29 +144,13 @@ function AuthStatus() {
 
   return (
     <div className="flex flex-col gap-2">
-      <Button variant={isDemoMode ? 'secondary' : 'outline'} size="sm" asChild>
-        <Link href={`/api/demo-mode?enable=${isDemoMode ? '0' : '1'}&redirect=${encodeURIComponent(pathname)}`}>
-          {isDemoMode ? 'Exit Demo Mode' : 'Open Demo Mode'}
+      <Button variant="outline" size="sm" asChild>
+        <Link href="/login">
+          Go to Login
         </Link>
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => initiateAnonymousSignIn(auth)}
-      >
-        Sign In Anonymously
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          initiateEmailSignIn(auth, 'test@example.com', 'password')
-        }
-      >
-        Sign In (Test User)
-      </Button>
       <p className="px-1 text-[11px] leading-4 text-muted-foreground">
-        Demo mode shows sample notices, owners, and properties without touching your real Gmail or Firestore data.
+        Access is now controlled by Firebase email/password sign-in plus the `roles_admin` check on the server.
       </p>
     </div>
   );

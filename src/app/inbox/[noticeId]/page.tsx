@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { findOwnersForNotice } from '@/lib/owner-matching';
 import { isDemoModeEnabled } from '@/lib/demo-session';
+import { requireAdminSession } from '@/lib/admin-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function NoticeDetailPage({ params }: { params: { noticeId: string } }) {
+  await requireAdminSession();
   const notice = await getNoticeById(params.noticeId);
 
   if (!notice) {

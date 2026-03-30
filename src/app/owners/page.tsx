@@ -2,10 +2,12 @@ import { OwnersClient } from '@/components/owners/owners-client';
 import { getOwners } from '@/lib/data';
 import { hasFirebaseAdminConfig } from '@/lib/firebase-admin';
 import { isDemoModeEnabled } from '@/lib/demo-session';
+import { requireAdminSession } from '@/lib/admin-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OwnersPage() {
+  await requireAdminSession();
   const owners = await getOwners();
   const demoMode = await isDemoModeEnabled();
   const importEnabled = hasFirebaseAdminConfig() && !demoMode;

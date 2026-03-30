@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { type DocumentData, type QueryDocumentSnapshot, type WriteBatch } from 'firebase-admin/firestore';
 
 import { buildBuildiumImportPayload } from '@/lib/buildium-import';
+import { getAdminSession } from '@/lib/admin-session';
 import { getAdminFirestore, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
@@ -38,6 +39,12 @@ async function deleteExistingBuildiumDocs(collectionName: 'owners' | 'properties
 }
 
 export async function POST(request: Request) {
+  const session = await getAdminSession();
+
+  if (!session) {
+    return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
+  }
+
   if (!hasFirebaseAdminConfig()) {
     return NextResponse.json(
       { error: 'Missing Firebase admin credentials. Buildium import requires FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.' },
