@@ -9,7 +9,7 @@ function decodeBasicAuth(header: string): { username: string; password: string }
   }
 
   try {
-    const decoded = atob(encoded);
+    const decoded = Buffer.from(encoded, 'base64').toString('utf8');
     const separatorIndex = decoded.indexOf(':');
 
     if (separatorIndex === -1) {
@@ -30,13 +30,6 @@ export function middleware(request: NextRequest) {
   const expectedPassword = process.env.APP_BASIC_AUTH_PASSWORD;
 
   if (!expectedUsername || !expectedPassword) {
-    if (process.env.VERCEL === '1') {
-      return new NextResponse(
-        'Missing APP_BASIC_AUTH_USER or APP_BASIC_AUTH_PASSWORD.',
-        { status: 500 }
-      );
-    }
-
     return NextResponse.next();
   }
 
