@@ -25,7 +25,7 @@ function SubmitButton() {
   );
 }
 
-function SyncForm() {
+function SyncForm({ demoMode }: { demoMode: boolean }) {
   const [state, formAction] = useActionState(syncGmail, initialState);
 
   return (
@@ -34,17 +34,25 @@ function SyncForm() {
         <CardHeader>
           <CardTitle>Sync Settings</CardTitle>
           <CardDescription>
-            Sync strata notices from your Gmail account. Specify how many days back to search.
+            {demoMode
+              ? 'Demo mode is on, so live Gmail sync is disabled here and the panel is showing sample sync history.'
+              : 'Sync strata notices from your Gmail account. Specify how many days back to search.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid w-full max-w-sm items-center gap-1.5">
             <Label htmlFor="daysBack">Days to Sync</Label>
-            <Input type="number" id="daysBack" name="daysBack" defaultValue="7" min="1" max="90" required />
+            <Input type="number" id="daysBack" name="daysBack" defaultValue="7" min="1" max="90" required disabled={demoMode} />
           </div>
         </CardContent>
         <CardFooter className="flex-col items-start gap-4">
-          <SubmitButton />
+          {demoMode ? (
+            <Button type="button" disabled>
+              Demo Mode Only
+            </Button>
+          ) : (
+            <SubmitButton />
+          )}
           {state?.message && (
             <Alert variant={state.status === 'error' ? 'destructive' : 'default'}>
               <Terminal className="h-4 w-4" />
@@ -69,7 +77,7 @@ function SyncForm() {
   );
 }
 
-export function GmailSyncClient({ logs }: { logs: SyncLog[] }) {
+export function GmailSyncClient({ logs, demoMode }: { logs: SyncLog[]; demoMode: boolean }) {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
@@ -77,8 +85,17 @@ export function GmailSyncClient({ logs }: { logs: SyncLog[] }) {
           Gmail Sync
         </h1>
       </div>
+      {demoMode && (
+        <Alert>
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Demo mode</AlertTitle>
+          <AlertDescription>
+            This page is showing example sync logs so you can demonstrate the workflow without reading a real mailbox.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
-        <SyncForm />
+        <SyncForm demoMode={demoMode} />
         <Card>
           <CardHeader>
             <CardTitle>Recent Sync Logs</CardTitle>

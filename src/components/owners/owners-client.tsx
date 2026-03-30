@@ -16,9 +16,10 @@ import type { BuildiumImportStats } from '@/lib/buildium-import';
 type OwnersClientProps = {
   initialOwners: Array<Owner & { id: string }>;
   importEnabled: boolean;
+  demoMode: boolean;
 };
 
-export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps) {
+export function OwnersClient({ initialOwners, importEnabled, demoMode }: OwnersClientProps) {
   const router = useRouter();
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -139,9 +140,14 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!importEnabled && (
+          {!importEnabled && !demoMode && (
             <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               Buildium import is unavailable until `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` are configured on the server.
+            </div>
+          )}
+          {demoMode && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Demo mode is active. Import is intentionally disabled so this walkthrough stays on sample owner data.
             </div>
           )}
 

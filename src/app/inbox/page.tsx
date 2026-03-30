@@ -1,11 +1,13 @@
 import { getNotices } from '@/lib/data';
 import { InboxClient } from '@/components/inbox/inbox-client';
+import { isDemoModeEnabled } from '@/lib/demo-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function InboxPage() {
   // Fetch notices for the inbox queue
   const notices = await getNotices({ status: ['New', 'Ready', 'Review'] });
+  const demoMode = await isDemoModeEnabled();
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
@@ -14,7 +16,7 @@ export default async function InboxPage() {
           Inbox Queue
         </h1>
       </div>
-      <InboxClient notices={notices} />
+      <InboxClient notices={notices} demoMode={demoMode} />
     </div>
   );
 }

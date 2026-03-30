@@ -13,9 +13,10 @@ interface DashboardClientProps {
     owners: number;
     sync: SyncLog | null;
   };
+  demoMode: boolean;
 }
 
-export function DashboardClient({ initialStats }: DashboardClientProps) {
+export function DashboardClient({ initialStats, demoMode }: DashboardClientProps) {
   const { pending, ready, dispatched, owners, sync } = initialStats;
 
   const syncStatus =
@@ -35,6 +36,13 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
           Overview
         </h1>
       </div>
+      {demoMode && (
+        <Card className="border-amber-200 bg-amber-50 text-amber-950 shadow-none">
+          <CardContent className="px-5 py-4 text-sm">
+            Demo mode is active. The cards and pages in this session are showing safe sample data for walkthroughs.
+          </CardContent>
+        </Card>
+      )}
       <StatsCards
         pendingNotices={pending}
         ownersCount={owners}

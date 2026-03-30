@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { findOwnersForNotice } from '@/lib/owner-matching';
+import { isDemoModeEnabled } from '@/lib/demo-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function NoticeDetailPage({ params }: { params: { noticeId:
 
   const owners = await getOwners();
   const matchedOwners = findOwnersForNotice(notice, owners);
+  const demoMode = await isDemoModeEnabled();
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
@@ -31,7 +33,7 @@ export default async function NoticeDetailPage({ params }: { params: { noticeId:
           Notice Details
         </h1>
       </div>
-      <NoticeDetailClient notice={notice} matchedOwners={matchedOwners} />
+      <NoticeDetailClient notice={notice} matchedOwners={matchedOwners} demoMode={demoMode} />
     </div>
   );
 }

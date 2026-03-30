@@ -450,9 +450,11 @@ function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice:
 export function NoticeDetailClient({
   notice,
   matchedOwners,
+  demoMode = false,
 }: {
   notice: StrataNotice;
   matchedOwners: WithId<Owner>[];
+  demoMode?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -476,6 +478,13 @@ export function NoticeDetailClient({
   const isActionable = notice.status === 'New' || notice.status === 'Ready' || notice.status === 'Review';
 
   const handleAiTriage = () => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'AI triage is disabled for sample notices.',
+      });
+      return;
+    }
     startTransition(async () => {
       try {
         await runAiTriage(notice.id, notice.content);
@@ -494,6 +503,13 @@ export function NoticeDetailClient({
   };
 
   const handleDispatch = () => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'Dispatch is disabled while you are presenting sample data.',
+      });
+      return;
+    }
     if (dispatchableOwners.length === 0) {
       toast({
         variant: 'destructive',
@@ -539,6 +555,13 @@ export function NoticeDetailClient({
   };
 
   const handleIgnore = () => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'Status changes are disabled for sample notices.',
+      });
+      return;
+    }
     startTransition(async () => {
       await markNoticeAsIgnored(notice.id);
       toast({ title: 'Notice Ignored' });
@@ -546,6 +569,13 @@ export function NoticeDetailClient({
   }
 
   const handleDelete = () => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'Delete is disabled while you are presenting sample notices.',
+      });
+      return;
+    }
     startTransition(async () => {
       await deleteSingleNotice(notice.id);
       toast({ title: 'Notice Deleted' });
@@ -556,6 +586,13 @@ export function NoticeDetailClient({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
+            {demoMode && (
+                <Card className="border-amber-200 bg-amber-50 text-amber-950 shadow-none">
+                    <CardContent className="px-5 py-4 text-sm">
+                        Demo mode is active. This detail view is safe sample content, so AI triage, dispatch, ignore, and delete are disabled.
+                    </CardContent>
+                </Card>
+            )}
             <OwnerMessageCard message={notice.ownerMessage} />
             <MatchedOwnersCard notice={notice} owners={matchedOwners} />
             <AttachmentCard notice={notice} />
@@ -578,13 +615,13 @@ export function NoticeDetailClient({
                 </CardContent>
             </Card>
             <div className="flex flex-wrap gap-4">
-                 <Button onClick={handleAiTriage} disabled={!['New', 'Review'].includes(notice.status) || isPending}>
+                 <Button onClick={handleAiTriage} disabled={demoMode || !['New', 'Review'].includes(notice.status) || isPending}>
                     <Zap className="mr-2 h-4 w-4" />
                     Run AI Triage
                 </Button>
                 <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button disabled={!isActionable || isPending || !notice.ownerMessage || hasMissingPdfAttachment || dispatchableOwners.length === 0}>Dispatch Notice</Button>
+                        <Button disabled={demoMode || !isActionable || isPending || !notice.ownerMessage || hasMissingPdfAttachment || dispatchableOwners.length === 0}>Dispatch Notice</Button>
                     </DialogTrigger>
                     <DispatchDialog 
                         notice={notice} 
@@ -594,11 +631,11 @@ export function NoticeDetailClient({
                     />
                 </Dialog>
                 
-                <Button variant="secondary" onClick={handleIgnore} disabled={!isActionable || isPending}>Mark as Ignored</Button>
+                <Button variant="secondary" onClick={handleIgnore} disabled={demoMode || !isActionable || isPending}>Mark as Ignored</Button>
                 
                 <Dialog>
                     <DialogTrigger asChild>
-                         <Button variant="destructive" disabled={isPending}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                         <Button variant="destructive" disabled={demoMode || isPending}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
                     </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>

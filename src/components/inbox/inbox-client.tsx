@@ -44,9 +44,7 @@ function StatusBadge({ status }: { status: StrataNotice['status'] }) {
 
   return <Badge variant={variant} className={colorClass}>{status}</Badge>;
 }
-
-
-export function InboxClient({ notices }: { notices: StrataNotice[] }) {
+export function InboxClient({ notices, demoMode = false }: { notices: StrataNotice[]; demoMode?: boolean }) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -71,6 +69,13 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
   const isSomeSelected = selectedRows.length > 0 && selectedRows.length < notices.length;
   
   const handleDelete = () => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'Delete is disabled while you are showing sample data.',
+      });
+      return;
+    }
     startTransition(async () => {
       await deleteNotices(selectedRows);
       toast({
@@ -82,6 +87,13 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
   };
 
   const handleAiTriage = (noticeId: string, content: string) => {
+    if (demoMode) {
+      toast({
+        title: 'Demo mode',
+        description: 'AI triage is disabled for sample notices.',
+      });
+      return;
+    }
     startTransition(async () => {
       try {
         await runAiTriage(noticeId, content);
@@ -102,13 +114,18 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
   return (
     <Card>
       <CardContent className="pt-6">
+        {demoMode && (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Demo mode is active. These notices are examples only, so delete and AI actions are locked.
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-4">
             <AlertDialog>
                 <AlertDialogTrigger asChild>
                     <Button
                         variant="outline"
                         size="sm"
-                        disabled={selectedRows.length === 0 || isPending}
+                        disabled={demoMode || selectedRows.length === 0 || isPending}
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete ({selectedRows.length})
@@ -172,14 +189,14 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem disabled={isPending || !['New', 'Review'].includes(notice.status)} onClick={() => handleAiTriage(notice.id, notice.content)}>
+                        <DropdownMenuItem disabled={demoMode || isPending || !['New', 'Review'].includes(notice.status)} onClick={() => handleAiTriage(notice.id, notice.content)}>
                           <Zap className="mr-2 h-4 w-4" />
                           Run AI Triage
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600" disabled={demoMode}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     <span>Delete</span>
                                 </DropdownMenuItem>
@@ -194,6 +211,13 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction onClick={() => {
+                                    if (demoMode) {
+                                        toast({
+                                          title: 'Demo mode',
+                                          description: 'Delete is disabled while you are showing sample data.',
+                                        });
+                                        return;
+                                    }
                                     startTransition(async () => {
                                         await deleteNotices([notice.id]);
                                         toast({ title: 'Notice Deleted' });

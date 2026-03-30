@@ -92,6 +92,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function AuthStatus() {
   const { auth, user, isUserLoading } = useFirebase();
+  const pathname = usePathname();
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
+  useEffect(() => {
+    setIsDemoMode(document.cookie.includes('strata_demo_mode=1'));
+  }, [pathname]);
 
   if (isUserLoading) {
     return <div className="text-xs text-muted-foreground">Checking access...</div>;
@@ -100,9 +106,21 @@ function AuthStatus() {
   if (user) {
     return (
       <div className="space-y-2 text-xs text-muted-foreground">
+        {isDemoMode && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+            Demo mode is on. This session is showing sample data only.
+          </div>
+        )}
         <div className="rounded-xl border border-sidebar-border/80 bg-white/70 px-3 py-2">
           Signed in as {user.isAnonymous ? 'Anonymous' : user.email}
         </div>
+        {isDemoMode && (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/api/demo-mode?enable=0&redirect=${encodeURIComponent(pathname)}`}>
+              Exit Demo
+            </Link>
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => auth.signOut()}>
           Logout
         </Button>
@@ -112,6 +130,11 @@ function AuthStatus() {
 
   return (
     <div className="flex flex-col gap-2">
+      <Button variant={isDemoMode ? 'secondary' : 'outline'} size="sm" asChild>
+        <Link href={`/api/demo-mode?enable=${isDemoMode ? '0' : '1'}&redirect=${encodeURIComponent(pathname)}`}>
+          {isDemoMode ? 'Exit Demo Mode' : 'Open Demo Mode'}
+        </Link>
+      </Button>
       <Button
         variant="outline"
         size="sm"
@@ -128,6 +151,9 @@ function AuthStatus() {
       >
         Sign In (Test User)
       </Button>
+      <p className="px-1 text-[11px] leading-4 text-muted-foreground">
+        Demo mode shows sample notices, owners, and properties without touching your real Gmail or Firestore data.
+      </p>
     </div>
   );
 }
