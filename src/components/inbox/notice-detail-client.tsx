@@ -36,6 +36,7 @@ import { collection } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice, runAiTriage } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import { findOwnersForNotice, getRelevantOwnerProperties, hasOwnerEmail } from '@/lib/owner-matching';
 
 
 function StatusBadge({ status }: { status: StrataNotice['status'] }) {
@@ -292,41 +293,76 @@ function AttachmentCard({ notice }: { notice: StrataNotice }) {
 }
 
 
-function findRecommendedOwners(notice: StrataNotice, allOwners: WithId<Owner>[] | null): WithId<Owner>[] {
-  if (!notice.audience || !allOwners) {
-    return [];
-  }
+function MatchedOwnersCard({
+  notice,
+  owners,
+  isLoading,
+}: {
+  notice: StrataNotice;
+  owners: WithId<Owner>[];
+  isLoading: boolean;
+}) {
+    const planCodes = [notice.planCode, ...notice.allPlanCodes]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .filter((value, index, values) => values.indexOf(value) === index);
 
-  const { decision, target_hints } = notice.audience;
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Target /> Matched Owners</CardTitle>
+                <CardDescription>
+                    {planCodes.length > 0
+                      ? `Matched by strata plan ${planCodes.join(', ')} and any unit hints found in the notice.`
+                      : 'No strata plan code was detected yet, so owner matching is unavailable.'}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading owners...</p>
+                ) : owners.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                        {planCodes.length > 0
+                          ? 'No imported owner records match this strata plan yet.'
+                          : 'Run Gmail sync and AI triage after you import Buildium owner data to see matches here.'}
+                    </p>
+                ) : (
+                    <ScrollArea className="h-72 pr-4">
+                        <div className="space-y-3">
+                            {owners.map((owner) => {
+                                const relevantProperties = getRelevantOwnerProperties(owner, notice);
 
-  if (decision === 'BROADCAST' || decision === 'REVIEW' || decision === 'DIRECT') {
-    return allOwners;
-  }
-
-  if (decision === 'TARGETED') {
-    const hints = [
-      ...target_hints.units,
-      ...target_hints.strata_lots,
-      ...target_hints.parking,
-      ...target_hints.locker,
-    ].filter(Boolean).map(h => h.toLowerCase());
-
-    if (hints.length === 0) return allOwners; // Fallback to all if no hints
-
-    const noticePlanCode = notice.planCode?.toLowerCase();
-
-    return allOwners.filter(owner => {
-      return owner.properties.some(property => {
-        const lowerCaseProperty = property.toLowerCase();
-        const propertyIncludesPlanCode = noticePlanCode ? lowerCaseProperty.includes(noticePlanCode) : true;
-        if (!propertyIncludesPlanCode) return false;
-
-        return hints.some(hint => lowerCaseProperty.includes(hint));
-      });
-    });
-  }
-
-  return [];
+                                return (
+                                    <div key={owner.id} className="rounded-lg border p-3">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div>
+                                                <div className="font-medium">{owner.name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {owner.email || 'No email on file'}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {owner.source === 'buildium' && <Badge variant="secondary">Buildium</Badge>}
+                                                {!owner.email && <Badge variant="outline">Match only</Badge>}
+                                            </div>
+                                        </div>
+                                        {relevantProperties.length > 0 && (
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {relevantProperties.map((property) => (
+                                                    <Badge key={`${owner.id}-${property}`} variant="outline">
+                                                        {property}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </ScrollArea>
+                )}
+            </CardContent>
+        </Card>
+    );
 }
 
 function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice: StrataNotice; owners: WithId<Owner>[]; onDispatch: () => void; isDispatching: boolean; }) {
@@ -427,9 +463,16 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
     () => (firestore && user ? collection(firestore, 'owners') : null),
     [firestore, user]
   );
-  const { data: allOwners } = useCollection<Owner>(ownersQuery);
+  const { data: allOwners, isLoading: isOwnersLoading } = useCollection<Owner>(ownersQuery);
 
-  const recommendedOwners = useMemo(() => findRecommendedOwners(notice, allOwners), [notice, allOwners]);
+  const matchedOwners = useMemo(() => findOwnersForNotice(notice, allOwners), [notice, allOwners]);
+  const dispatchableOwners = useMemo(
+    () =>
+      matchedOwners.filter(
+        (owner): owner is WithId<Owner> & { email: string } => hasOwnerEmail(owner)
+      ),
+    [matchedOwners]
+  );
   const hasMissingPdfAttachment = useMemo(
     () =>
       notice.attachments.some(
@@ -459,8 +502,12 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
   };
 
   const handleDispatch = () => {
-    if (recommendedOwners.length === 0) {
-      toast({ variant: 'destructive', title: 'No recipients found', description: 'Cannot dispatch notice to zero owners.' });
+    if (dispatchableOwners.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No dispatchable recipients',
+        description: 'Matched owners were found, but none of them have an email address on file.',
+      });
       return;
     }
     if (hasMissingPdfAttachment) {
@@ -475,7 +522,7 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
       try {
         const result = await dispatchGroupNotice(
           notice.id,
-          recommendedOwners.map((owner) => ({
+          dispatchableOwners.map((owner) => ({
             id: owner.id,
             name: owner.name,
             email: owner.email,
@@ -518,6 +565,7 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
     <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
             <OwnerMessageCard message={notice.ownerMessage} />
+            <MatchedOwnersCard notice={notice} owners={matchedOwners} isLoading={isOwnersLoading} />
             <AttachmentCard notice={notice} />
             <Card>
                 <CardHeader>
@@ -544,12 +592,12 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                 </Button>
                 <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button disabled={!isActionable || isPending || !allOwners || !notice.ownerMessage || hasMissingPdfAttachment}>Dispatch Notice</Button>
+                        <Button disabled={!isActionable || isPending || !allOwners || !notice.ownerMessage || hasMissingPdfAttachment || dispatchableOwners.length === 0}>Dispatch Notice</Button>
                     </DialogTrigger>
                     {allOwners && (
                         <DispatchDialog 
                             notice={notice} 
-                            owners={recommendedOwners}
+                            owners={dispatchableOwners}
                             onDispatch={handleDispatch}
                             isDispatching={isPending}
                         />

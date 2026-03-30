@@ -9,6 +9,7 @@ import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categoriz
 import { generateOwnerMessage } from '@/ai/flows/generate-owner-message-flow';
 import { attachmentHasStoredContent, isPdfAttachment, type SyncResult } from './definitions';
 import { persistParsedAttachment } from './notice-attachments';
+import { extractStrataPlanCodes } from './strata-identifiers';
 import {
   createStoredNotice,
   createStoredSyncLog,
@@ -40,18 +41,6 @@ function cleanText(text: string): string {
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   return cleaned;
 }
-
-const strataPlanRegex = /(EPS|BCS|LMS|VR|VAS)\s*-?\s*(\d{2,6})/gi;
-
-function matchStrataPlans(text: string): string[] {
-  const matches = text.matchAll(strataPlanRegex);
-  const codes = new Set<string>();
-  for (const match of matches) {
-    codes.add(`${match[1].toUpperCase()}${match[2]}`);
-  }
-  return Array.from(codes);
-}
-
 
 // --- GMAIL SYNC ACTION ---
 
@@ -140,7 +129,7 @@ export async function syncGmail(
         const cleanedContent = cleanText(parsed.text || '');
         const searchText = `${parsed.subject || ''}\n${parsed.from?.text || ''}\n${cleanedContent}`;
         
-        const planCodes = matchStrataPlans(searchText);
+        const planCodes = extractStrataPlanCodes(searchText);
 
         if (planCodes.length > 0) {
           stats.matched++;

@@ -1,32 +1,31 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Owner } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Upload } from 'lucide-react';
-import { Textarea } from '../ui/textarea';
+import { AlertCircle, FileSpreadsheet, Upload } from 'lucide-react';
 import Papa from 'papaparse';
-import { z } from 'zod';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import {
+  buildBuildiumImportPayload,
+  type ImportedOwnerRecord,
+  type ImportedPropertyRecord,
+} from '@/lib/buildium-import';
 
-const CsvRowSchema = z.object({
-  'Property name': z.string(),
-  'Address 1': z.string(),
-  City: z.string(),
-  State: z.string(),
-  'Postal code': z.string(),
-  'Rental owners': z.string(),
-});
-
+const BUILDIUM_SOURCE = 'buildium';
+const BATCH_LIMIT = 400;
 
 export function OwnersClient() {
   const [isImporting, setIsImporting] = useState(false);
-  const [csvData, setCsvData] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -37,12 +36,59 @@ export function OwnersClient() {
   );
   const { data: owners, isLoading } = useCollection<Owner>(ownersCollection);
 
+  const parseCsvFile = (file: File): Promise<unknown[]> =>
+    new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            reject(new Error(`CSV parsing error: ${results.errors[0].message}`));
+            return;
+          }
+
+          resolve(results.data as unknown[]);
+        },
+        error: (error) => reject(error),
+      });
+    });
+
+  const commitChunkedWrites = async <T,>(
+    items: T[],
+    applyWrite: (batch: ReturnType<typeof writeBatch>, item: T) => void
+  ) => {
+    for (let index = 0; index < items.length; index += BATCH_LIMIT) {
+      const batch = writeBatch(firestore);
+      const chunk = items.slice(index, index + BATCH_LIMIT);
+      chunk.forEach((item) => applyWrite(batch, item));
+      await batch.commit();
+    }
+  };
+
+  const deleteImportedDocs = async (collectionName: 'owners' | 'properties') => {
+    const snapshot = await getDocs(
+      query(collection(firestore, collectionName), where('source', '==', BUILDIUM_SOURCE))
+    );
+
+    if (snapshot.empty) {
+      return;
+    }
+
+    await commitChunkedWrites(snapshot.docs, (batch, documentSnapshot) => {
+      batch.delete(documentSnapshot.ref);
+    });
+  };
+
   const handleImport = async () => {
-    if (!csvData.trim() || !firestore || !user) {
+    if (!selectedFile || !firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: !user ? 'You must be logged in to import owners.' : (csvData.trim() ? 'Firestore not available.' : 'CSV data cannot be empty.'),
+        description: !user
+          ? 'You must be logged in to import owners.'
+          : selectedFile
+            ? 'Firestore not available.'
+            : 'Please choose a Buildium CSV export first.',
       });
       return;
     }
@@ -50,57 +96,29 @@ export function OwnersClient() {
     setIsImporting(true);
 
     try {
-      const parsed = Papa.parse(csvData, { header: true, skipEmptyLines: true });
-      if (parsed.errors.length > 0) {
-        throw new Error(`CSV Parsing Error: ${parsed.errors[0].message}`);
-      }
+      const rawRows = await parseCsvFile(selectedFile);
+      const { owners: importedOwners, properties: importedProperties, stats } = buildBuildiumImportPayload(rawRows);
 
-      const rows = z.array(CsvRowSchema).parse(parsed.data);
+      await deleteImportedDocs('owners');
+      await deleteImportedDocs('properties');
 
-      const parseOwnerString = (ownerStr: string) => {
-        return ownerStr.split(',').map(part => {
-            const match = part.trim().match(/(.*?)\s*<(.*?)>/);
-            if (match) return { name: match[1].trim(), email: match[2].trim().toLowerCase() };
-            return null;
-        }).filter(Boolean) as {name: string, email: string}[];
-      };
+      await commitChunkedWrites(importedProperties, (batch, propertyRecord: ImportedPropertyRecord) => {
+        batch.set(doc(collection(firestore, 'properties'), propertyRecord.docId), propertyRecord.data);
+      });
 
-      const parsePropertyName = (propName: string) => {
-        const planMatch = propName.match(/(BCS|EPS|LMS|VR|VAS)\s*(\d+)/i);
-        const unitMatch = propName.match(/unit\s*#?(\w+)/i);
-        return {
-            planCode: planMatch ? `${planMatch[1].toUpperCase()}${planMatch[2]}`: null,
-            unitNumber: unitMatch ? unitMatch[1] : null,
-        }
-      };
-
-      // In a real-world scenario, you might want to check for existing owners first.
-      // For this MVP, we will just add all owners from the CSV.
-      const importPromises = [];
-
-      for (const row of rows) {
-        const { planCode, unitNumber } = parsePropertyName(row['Property name']);
-        const propertyIdentifier = `${planCode || row['Property name']}${unitNumber ? ' - ' + unitNumber : ''}`;
-        const parsedOwners = parseOwnerString(row['Rental owners']);
-        
-        for (const owner of parsedOwners) {
-            const newOwner: Omit<Owner, 'id'> = {
-                name: owner.name,
-                email: owner.email,
-                properties: [propertyIdentifier]
-            };
-            importPromises.push(addDoc(collection(firestore, 'owners'), newOwner));
-        }
-      }
-
-      await Promise.all(importPromises);
+      await commitChunkedWrites(importedOwners, (batch, ownerRecord: ImportedOwnerRecord) => {
+        batch.set(doc(collection(firestore, 'owners'), ownerRecord.docId), ownerRecord.data);
+      });
 
       toast({
         title: 'Import Successful',
-        description: `Successfully started import for ${rows.length} rows. Owners will appear shortly.`,
+        description:
+          stats.unresolvedPlanCodes > 0
+            ? `Imported ${stats.properties} properties and ${stats.owners} owner records. ${stats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`
+            : `Imported ${stats.properties} properties and ${stats.owners} owner records.`,
       });
       setIsDialogOpen(false);
-      setCsvData('');
+      setSelectedFile(null);
 
     } catch (error: any) {
       console.error("CSV Import Error:", error);
@@ -127,20 +145,38 @@ export function OwnersClient() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Import Owners from CSV</DialogTitle>
+              <DialogTitle>Import Owners from CSV</DialogTitle>
                 <CardDescription>
-                  Paste your CSV content below. Required headers: "Property name", "Address 1", "City", "State", "Postal code", "Rental owners".
+                  Upload a Buildium property export. We will derive owner groups, plan codes, and unit numbers for notice matching.
                 </CardDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <Textarea
-                  placeholder="Paste CSV data here..."
-                  value={csvData}
-                  onChange={(e) => setCsvData(e.target.value)}
-                  className="h-64"
-                />
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Buildium format</AlertTitle>
+                  <AlertDescription>
+                    Supported columns: <code>Property name</code>, <code>Address 1</code>, <code>City/Locality</code>,
+                    <code> State/Province</code>, <code>Postal code</code>, <code>Rental owners</code>, and <code>Id</code>.
+                    This import matches notices by strata plan code like <code>EPS5421</code> and unit numbers like <code>1908</code>.
+                  </AlertDescription>
+                </Alert>
+                <div className="grid gap-2">
+                  <Label htmlFor="buildium-csv">Buildium CSV file</Label>
+                  <Input
+                    id="buildium-csv"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                  />
+                </div>
+                {selectedFile && (
+                  <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    <span>{selectedFile.name}</span>
+                  </div>
+                )}
               </div>
-              <Button onClick={handleImport} disabled={isImporting}>
+              <Button onClick={handleImport} disabled={isImporting || !selectedFile}>
                 {isImporting ? 'Importing...' : 'Import'}
               </Button>
             </DialogContent>
@@ -167,7 +203,7 @@ export function OwnersClient() {
             {!isLoading && owners?.map((owner) => (
               <TableRow key={owner.id}>
                 <TableCell>{owner.name}</TableCell>
-                <TableCell>{owner.email}</TableCell>
+                <TableCell>{owner.email || 'No email on file'}</TableCell>
                 <TableCell>{owner.properties.join(', ')}</TableCell>
               </TableRow>
             ))}

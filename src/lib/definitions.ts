@@ -17,8 +17,12 @@ export type StrataNotice = {
 
 export type Owner = {
   name: string;
-  email: string;
+  email: string | null;
   properties: string[]; // e.g., ["BCS-1234 - 101", "EPS-5678 - 202"]
+  planCodes?: string[];
+  unitNumbers?: string[];
+  propertyIds?: string[];
+  source?: 'manual' | 'buildium';
 };
 
 export type Property = {
