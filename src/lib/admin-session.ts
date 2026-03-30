@@ -3,7 +3,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { getAdminAuth, getAdminFirestore, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
+import { getAdminAuth, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
 
 export const ADMIN_SESSION_COOKIE = 'strata_admin_session';
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 5;
@@ -33,14 +33,6 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   try {
     const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
-    const adminDoc = await getAdminFirestore()
-      .collection('roles_admin')
-      .doc(decoded.uid)
-      .get();
-
-    if (!adminDoc.exists) {
-      return null;
-    }
 
     return {
       uid: decoded.uid,

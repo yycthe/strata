@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const session = await getAdminSession();
 
   if (!session) {
-    return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
+    return NextResponse.json({ error: 'Login required.' }, { status: 401 });
   }
 
   if (!hasFirebaseAdminConfig()) {

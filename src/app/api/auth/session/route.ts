@@ -5,7 +5,7 @@ import {
   createAdminSessionCookie,
   getAdminSessionMaxAgeSeconds,
 } from '@/lib/admin-session';
-import { getAdminAuth, getAdminFirestore, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
+import { getAdminAuth, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,18 +26,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const decoded = await getAdminAuth().verifyIdToken(idToken);
-    const adminDoc = await getAdminFirestore()
-      .collection('roles_admin')
-      .doc(decoded.uid)
-      .get();
-
-    if (!adminDoc.exists) {
-      return NextResponse.json(
-        { error: 'This Firebase user is not listed in roles_admin.' },
-        { status: 403 }
-      );
-    }
+    await getAdminAuth().verifyIdToken(idToken);
 
     const sessionCookie = await createAdminSessionCookie(idToken);
     const response = NextResponse.json({ ok: true });

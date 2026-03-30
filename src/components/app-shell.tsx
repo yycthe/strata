@@ -150,7 +150,7 @@ function AuthStatus() {
         </Link>
       </Button>
       <p className="px-1 text-[11px] leading-4 text-muted-foreground">
-        Access is now controlled by Firebase email/password sign-in plus the `roles_admin` check on the server.
+        Access is now controlled by Firebase email/password sign-in only.
       </p>
     </div>
   );

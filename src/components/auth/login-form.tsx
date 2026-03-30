@@ -53,10 +53,9 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md border-border/70 bg-white/95 shadow-none">
       <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl tracking-tight">Admin Sign In</CardTitle>
+        <CardTitle className="text-2xl tracking-tight">Sign In</CardTitle>
         <CardDescription>
-          Use your Firebase email/password account. This account must also exist in
-          `roles_admin`.
+          Use any Firebase email/password account that exists in this project.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

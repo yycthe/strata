@@ -22,7 +22,7 @@ export async function GET(
   const session = await getAdminSession();
 
   if (!session) {
-    return NextResponse.json({ error: 'Admin login required.' }, { status: 401 });
+    return NextResponse.json({ error: 'Login required.' }, { status: 401 });
   }
 
   const { noticeId, attachmentId } = await Promise.resolve(context.params);
