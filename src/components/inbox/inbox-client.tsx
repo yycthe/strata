@@ -172,7 +172,7 @@ export function InboxClient({ notices }: { notices: StrataNotice[] }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem disabled={isPending || notice.status !== 'New'} onClick={() => handleAiTriage(notice.id, notice.content)}>
+                        <DropdownMenuItem disabled={isPending || !['New', 'Review'].includes(notice.status)} onClick={() => handleAiTriage(notice.id, notice.content)}>
                           <Zap className="mr-2 h-4 w-4" />
                           Run AI Triage
                         </DropdownMenuItem>

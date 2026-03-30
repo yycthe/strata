@@ -23,11 +23,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Bot, CheckCircle, Mail, Target, Trash2 } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle, Mail, Target, Trash2, Zap } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, WithId } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice } from '@/lib/actions';
+import { dispatchGroupNotice, markNoticeAsIgnored, deleteSingleNotice, runAiTriage } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -312,6 +312,24 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
 
   const isActionable = notice.status === 'New' || notice.status === 'Ready' || notice.status === 'Review';
 
+  const handleAiTriage = () => {
+    startTransition(async () => {
+      try {
+        await runAiTriage(notice.id, notice.content);
+        toast({
+          title: 'AI Triage Complete',
+          description: `Notice has been processed.`,
+        });
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'AI Triage Failed',
+          description: error.message,
+        });
+      }
+    });
+  };
+
   const handleDispatch = () => {
     if (recommendedOwners.length === 0) {
       toast({ variant: 'destructive', title: 'No recipients found', description: 'Cannot dispatch notice to zero owners.' });
@@ -363,6 +381,10 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                 </CardContent>
             </Card>
             <div className="flex gap-4">
+                 <Button onClick={handleAiTriage} disabled={!['New', 'Review'].includes(notice.status) || isPending}>
+                    <Zap className="mr-2 h-4 w-4" />
+                    Run AI Triage
+                </Button>
                 <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
                     <DialogTrigger asChild>
                         <Button disabled={!isActionable || isPending || !allOwners || !notice.ownerMessage}>Dispatch Notice</Button>
