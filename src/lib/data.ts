@@ -1,11 +1,12 @@
 import { unstable_noStore as noStore } from 'next/cache';
 
-import type { Property, StrataNotice, SyncLog } from './definitions';
+import type { Owner, Property, StrataNotice, SyncLog } from './definitions';
 import {
   getStoredLastSyncLog,
   getStoredNoticeById,
   getStoredNotices,
   getStoredNoticesCount,
+  getStoredOwners,
   getStoredProperties,
   getStoredSyncLogs,
 } from './server-store';
@@ -44,22 +45,29 @@ export async function getProperties(): Promise<Property[]> {
     return getStoredProperties();
 }
 
+export async function getOwners(): Promise<Array<Owner & { id: string }>> {
+    noStore();
+    return getStoredOwners();
+}
+
 export async function getDashboardStats(): Promise<{
   pending: number;
   ready: number;
   dispatched: number;
+  owners: number;
   sync: SyncLog | null;
 }> {
   noStore();
 
-  const [notices, sync] = await Promise.all([
+  const [notices, sync, owners] = await Promise.all([
     getStoredNotices(),
     getStoredLastSyncLog(),
+    getStoredOwners(),
   ]);
 
   const pending = notices.filter((notice) => notice.status === 'New' || notice.status === 'Review').length;
   const ready = notices.filter((notice) => notice.status === 'Ready').length;
   const dispatched = notices.filter((notice) => notice.status === 'Dispatched').length;
 
-  return { pending, ready, dispatched, sync };
+  return { pending, ready, dispatched, owners: owners.length, sync };
 }

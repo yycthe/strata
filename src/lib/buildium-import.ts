@@ -71,8 +71,9 @@ export function buildBuildiumImportPayload(rowsInput: unknown[]) {
     const city = row['City/Locality'].trim();
     const state = row['State/Province'].trim();
     const postalCode = row['Postal code'].trim();
-    const ownerName = normalizeOwnerName(row['Rental owners']);
     const propertyId = row.Id.trim();
+    const normalizedOwnerName = normalizeOwnerName(row['Rental owners']);
+    const ownerName = normalizedOwnerName || `Unassigned owner ${propertyId}`;
     const planCode = extractPrimaryStrataPlanCode(propertyName);
     const unitNumber = extractUnitNumberFromAddress(address1);
 

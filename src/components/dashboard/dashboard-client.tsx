@@ -3,8 +3,6 @@
 import { StatsCards } from '@/components/dashboard/stats-cards';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
 import type { SyncLog } from '@/lib/definitions';
 
 interface DashboardClientProps {
@@ -12,21 +10,13 @@ interface DashboardClientProps {
     pending: number;
     ready: number;
     dispatched: number;
+    owners: number;
     sync: SyncLog | null;
   };
 }
 
 export function DashboardClient({ initialStats }: DashboardClientProps) {
-  const { firestore, user } = useFirebase();
-
-  const ownersQuery = useMemoFirebase(
-    () => (firestore && user ? collection(firestore, 'owners') : null),
-    [firestore, user]
-  );
-  const { data: ownersData } = useCollection(ownersQuery);
-  const ownersCount = ownersData?.length ?? 0;
-
-  const { pending, ready, dispatched, sync } = initialStats;
+  const { pending, ready, dispatched, owners, sync } = initialStats;
 
   const syncStatus =
     sync?.status === 'success'
@@ -41,17 +31,17 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
-        <h1 className="font-headline text-lg font-semibold md:text-2xl">
+        <h1 className="font-headline text-lg font-semibold tracking-tight md:text-2xl">
           Overview
         </h1>
       </div>
       <StatsCards
         pendingNotices={pending}
-        ownersCount={ownersCount}
+        ownersCount={owners}
         syncStatus={syncStatus}
       />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="border-border/70 bg-white/90 shadow-none">
           <CardHeader>
             <CardTitle className="font-headline">Notice Funnel</CardTitle>
           </CardHeader>
@@ -72,7 +62,7 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-border/70 bg-white/90 shadow-none">
           <CardHeader>
             <CardTitle className="font-headline">Last Sync Details</CardTitle>
           </CardHeader>

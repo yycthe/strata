@@ -14,7 +14,7 @@ export function StatsCards({
 }: StatsCardsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card>
+      <Card className="border-border/70 bg-white/90 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Pending Notices</CardTitle>
           <FileClock className="h-4 w-4 text-muted-foreground" />
@@ -26,19 +26,19 @@ export function StatsCards({
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card className="border-border/70 bg-white/90 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Owners Loaded</CardTitle>
+          <CardTitle className="text-sm font-medium">Owners Matched</CardTitle>
           <Users className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{ownersCount}</div>
           <p className="text-xs text-muted-foreground">
-            Available for notice dispatch
+            Imported from your platform data
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card className="border-border/70 bg-white/90 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Last Sync Status</CardTitle>
           <Wifi className="h-4 w-4 text-muted-foreground" />

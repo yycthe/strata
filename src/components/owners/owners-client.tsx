@@ -1,131 +1,103 @@
 'use client';
 
-import { useState } from 'react';
-import { Owner } from '@/lib/definitions';
+import { useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Upload } from 'lucide-react';
+
+import type { Owner } from '@/lib/definitions';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle, FileSpreadsheet, Upload } from 'lucide-react';
-import Papa from 'papaparse';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-import {
-  buildBuildiumImportPayload,
-  type ImportedOwnerRecord,
-  type ImportedPropertyRecord,
-} from '@/lib/buildium-import';
 
-const BUILDIUM_SOURCE = 'buildium';
-const BATCH_LIMIT = 400;
+type OwnersClientProps = {
+  initialOwners: Array<Owner & { id: string }>;
+  importEnabled: boolean;
+};
 
-export function OwnersClient() {
-  const [isImporting, setIsImporting] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+type ImportStats = {
+  properties: number;
+  owners: number;
+  unresolvedPlanCodes: number;
+};
+
+export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps) {
+  const router = useRouter();
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [lastImportStats, setLastImportStats] = useState<ImportStats | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
-  const ownersCollection = useMemoFirebase(
-    () => (firestore && user ? collection(firestore, 'owners') : null),
-    [firestore, user]
+  const owners = initialOwners;
+  const summary = useMemo(
+    () => ({
+      ownersWithPlanCodes: owners.filter((owner) => (owner.planCodes?.length ?? 0) > 0).length,
+      ownersWithoutEmail: owners.filter((owner) => !owner.email).length,
+      buildiumOwners: owners.filter((owner) => owner.source === 'buildium').length,
+    }),
+    [owners]
   );
-  const { data: owners, isLoading } = useCollection<Owner>(ownersCollection);
-
-  const parseCsvFile = (file: File): Promise<unknown[]> =>
-    new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          if (results.errors.length > 0) {
-            reject(new Error(`CSV parsing error: ${results.errors[0].message}`));
-            return;
-          }
-
-          resolve(results.data as unknown[]);
-        },
-        error: (error) => reject(error),
-      });
-    });
-
-  const commitChunkedWrites = async <T,>(
-    items: T[],
-    applyWrite: (batch: ReturnType<typeof writeBatch>, item: T) => void
-  ) => {
-    for (let index = 0; index < items.length; index += BATCH_LIMIT) {
-      const batch = writeBatch(firestore);
-      const chunk = items.slice(index, index + BATCH_LIMIT);
-      chunk.forEach((item) => applyWrite(batch, item));
-      await batch.commit();
-    }
-  };
-
-  const deleteImportedDocs = async (collectionName: 'owners' | 'properties') => {
-    const snapshot = await getDocs(
-      query(collection(firestore, collectionName), where('source', '==', BUILDIUM_SOURCE))
-    );
-
-    if (snapshot.empty) {
-      return;
-    }
-
-    await commitChunkedWrites(snapshot.docs, (batch, documentSnapshot) => {
-      batch.delete(documentSnapshot.ref);
-    });
-  };
 
   const handleImport = async () => {
-    if (!selectedFile || !firestore || !user) {
+    if (!selectedFile) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: !user
-          ? 'You must be logged in to import owners.'
-          : selectedFile
-            ? 'Firestore not available.'
-            : 'Please choose a Buildium CSV export first.',
+        title: 'No file selected',
+        description: 'Choose a Buildium CSV export first.',
       });
       return;
     }
+
+    setLastError(null);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
 
     setIsImporting(true);
 
     try {
-      const rawRows = await parseCsvFile(selectedFile);
-      const { owners: importedOwners, properties: importedProperties, stats } = buildBuildiumImportPayload(rawRows);
-
-      await deleteImportedDocs('owners');
-      await deleteImportedDocs('properties');
-
-      await commitChunkedWrites(importedProperties, (batch, propertyRecord: ImportedPropertyRecord) => {
-        batch.set(doc(collection(firestore, 'properties'), propertyRecord.docId), propertyRecord.data);
+      const response = await fetch('/api/import/buildium', {
+        method: 'POST',
+        body: formData,
       });
 
-      await commitChunkedWrites(importedOwners, (batch, ownerRecord: ImportedOwnerRecord) => {
-        batch.set(doc(collection(firestore, 'owners'), ownerRecord.docId), ownerRecord.data);
-      });
+      const rawPayload = await response.text();
+      let payload: any = {};
 
-      toast({
-        title: 'Import Successful',
-        description:
-          stats.unresolvedPlanCodes > 0
-            ? `Imported ${stats.properties} properties and ${stats.owners} owner records. ${stats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`
-            : `Imported ${stats.properties} properties and ${stats.owners} owner records.`,
-      });
-      setIsDialogOpen(false);
+      try {
+        payload = rawPayload ? JSON.parse(rawPayload) : {};
+      } catch {
+        payload = { error: rawPayload || 'Buildium import failed.' };
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Buildium import failed.');
+      }
+
+      setLastImportStats(payload.stats);
       setSelectedFile(null);
-
+      setLastError(null);
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
+      router.refresh();
+      toast({
+        title: 'Import complete',
+        description:
+          payload.stats.unresolvedPlanCodes > 0
+            ? `Imported ${payload.stats.properties} properties and ${payload.stats.owners} owner groups. ${payload.stats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`
+            : `Imported ${payload.stats.properties} properties and ${payload.stats.owners} owner groups.`,
+      });
     } catch (error: any) {
-      console.error("CSV Import Error:", error);
+      const message = error.message || 'An unknown error occurred during import.';
+      setLastError(message);
       toast({
         variant: 'destructive',
-        title: 'Import Failed',
-        description: error.message || "An unknown error occurred during import."
+        title: 'Import failed',
+        description: message,
       });
     } finally {
       setIsImporting(false);
@@ -133,90 +105,175 @@ export function OwnersClient() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle>All Owners</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!user}>
-                <Upload className="mr-2 h-4 w-4" /> Import from CSV
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-              <DialogTitle>Import Owners from CSV</DialogTitle>
-                <CardDescription>
-                  Upload a Buildium property export. We will derive owner groups, plan codes, and unit numbers for notice matching.
-                </CardDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Buildium format</AlertTitle>
-                  <AlertDescription>
-                    Supported columns: <code>Property name</code>, <code>Address 1</code>, <code>City/Locality</code>,
-                    <code> State/Province</code>, <code>Postal code</code>, <code>Rental owners</code>, and <code>Id</code>.
-                    This import matches notices by strata plan code like <code>EPS5421</code> and unit numbers like <code>1908</code>.
-                  </AlertDescription>
-                </Alert>
-                <div className="grid gap-2">
-                  <Label htmlFor="buildium-csv">Buildium CSV file</Label>
-                  <Input
-                    id="buildium-csv"
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-                  />
-                </div>
-                {selectedFile && (
-                  <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span>{selectedFile.name}</span>
-                  </div>
-                )}
-              </div>
-              <Button onClick={handleImport} disabled={isImporting || !selectedFile}>
-                {isImporting ? 'Importing...' : 'Import'}
-              </Button>
-            </DialogContent>
-          </Dialog>
+    <div className="space-y-5">
+      <section className="space-y-3">
+        <div className="max-w-2xl space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Import one Buildium property export and the platform will normalize plan codes and unit numbers so each notice can match the right owner group.
+          </p>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Properties</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Owner groups</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight">{owners.length}</div>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Plan-coded</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight">{summary.ownersWithPlanCodes}</div>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Match only</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight">{summary.ownersWithoutEmail}</div>
+          </div>
+        </div>
+      </section>
+
+      <Card className="border-border/70 bg-white/90 shadow-none">
+        <CardHeader className="space-y-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="tracking-tight">Import Buildium CSV</CardTitle>
+              <CardDescription>
+                Replaces previous Buildium-sourced owner and property records, then refreshes matching across the app.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">{summary.buildiumOwners} from Buildium</Badge>
+              <Badge variant="outline">CSV only</Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!importEnabled && (
+            <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              Buildium import is unavailable until `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` are configured on the server.
+            </div>
+          )}
+
+          <label
+            htmlFor="buildium-csv"
+            className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-5 transition-colors hover:border-primary/40 hover:bg-white"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/8 text-primary">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-medium tracking-tight">Choose Buildium export</div>
+                <div className="text-sm text-muted-foreground">
+                  Supports the property export CSV you shared. We extract strata plan and unit from each row.
+                </div>
+              </div>
+            </div>
+            <Input
+              ref={inputRef}
+              id="buildium-csv"
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-muted-foreground">
+              {selectedFile ? `Selected: ${selectedFile.name}` : 'No file selected yet.'}
+            </div>
+            <Button
+              onClick={handleImport}
+              disabled={!importEnabled || isImporting || !selectedFile}
+              className="min-w-40"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {isImporting ? 'Importing...' : 'Import CSV'}
+            </Button>
+          </div>
+
+          <div className="rounded-2xl bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
+            The old importer felt broken because it wrote directly from the browser into Firestore. This uploader now imports on the server, so browser-side admin permission issues are out of the path.
+          </div>
+
+          {lastError && (
+            <div className="flex items-start gap-2 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4" />
+              <div>{lastError}</div>
+            </div>
+          )}
+
+          {lastImportStats && (
+            <div className="flex items-start gap-2 rounded-2xl bg-accent/70 px-4 py-3 text-sm">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />
+              <div>
+                Imported {lastImportStats.properties} properties and {lastImportStats.owners} owner groups.
+                {lastImportStats.unresolvedPlanCodes > 0 && ` ${lastImportStats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 bg-white/90 shadow-none">
+        <CardHeader>
+          <CardTitle className="tracking-tight">Imported Owners</CardTitle>
+          <CardDescription>
+            These records are used to decide which owner group a notice belongs to. Missing email is okay if the record is only used for matching.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground">
-                  Loading owners...
-                </TableCell>
+                <TableHead>Name</TableHead>
+                <TableHead>Plan / Unit</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Properties</TableHead>
               </TableRow>
-            )}
-            {!isLoading && owners?.map((owner) => (
-              <TableRow key={owner.id}>
-                <TableCell>{owner.name}</TableCell>
-                <TableCell>{owner.email || 'No email on file'}</TableCell>
-                <TableCell>{owner.properties.join(', ')}</TableCell>
-              </TableRow>
-            ))}
-            {!isLoading && (!owners || owners.length === 0) && (
+            </TableHeader>
+            <TableBody>
+              {owners.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
-                        { user ? 'No owners found in Firestore. Try importing some from a CSV file.' : 'Please log in to view owners.' }
-                    </TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    No owner records imported yet.
+                  </TableCell>
                 </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+              )}
+              {owners.map((owner) => (
+                <TableRow key={owner.id}>
+                  <TableCell className="align-top">
+                    <div className="font-medium">{owner.name}</div>
+                    {owner.source === 'buildium' && (
+                      <div className="mt-1">
+                        <Badge variant="secondary">Buildium</Badge>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <div className="flex flex-wrap gap-2">
+                      {(owner.planCodes ?? []).map((planCode) => (
+                        <Badge key={`${owner.id}-${planCode}`} variant="outline">
+                          {planCode}
+                        </Badge>
+                      ))}
+                      {(owner.unitNumbers ?? []).slice(0, 3).map((unit) => (
+                        <Badge key={`${owner.id}-unit-${unit}`} variant="outline">
+                          Unit {unit}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="align-top text-muted-foreground">
+                    {owner.email || 'No email on file'}
+                  </TableCell>
+                  <TableCell className="align-top text-sm text-muted-foreground">
+                    {owner.properties.slice(0, 2).join(', ')}
+                    {owner.properties.length > 2 && ` +${owner.properties.length - 2} more`}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

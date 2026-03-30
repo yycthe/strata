@@ -11,13 +11,13 @@ export default async function PropertiesPage() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
       <div className="flex items-center">
-        <h1 className="font-headline text-lg font-semibold md:text-2xl">
+        <h1 className="font-headline text-lg font-semibold tracking-tight md:text-2xl">
           Properties
         </h1>
       </div>
-      <Card>
+      <Card className="border-border/70 bg-white/90 shadow-none">
         <CardHeader>
-          <CardTitle>All Properties</CardTitle>
+          <CardTitle className="tracking-tight">All Properties</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -30,6 +30,13 @@ export default async function PropertiesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {properties.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    No properties imported yet.
+                  </TableCell>
+                </TableRow>
+              )}
               {properties.map((prop) => (
                 <TableRow key={prop.id}>
                   <TableCell>{prop.name}</TableCell>

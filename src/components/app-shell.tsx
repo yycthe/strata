@@ -37,26 +37,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const menuItems = [
     { href: '/', label: 'Overview', icon: LayoutDashboard },
-    { href: '/gmail-sync', label: 'Gmail Sync', icon: Mail },
-    { href: '/inbox', label: 'Inbox Queue', icon: Inbox },
-    { href: '/history', label: 'Sent History', icon: Send },
+    { href: '/gmail-sync', label: 'Sync', icon: Mail },
+    { href: '/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/history', label: 'History', icon: Send },
     { href: '/properties', label: 'Properties', icon: Building },
     { href: '/owners', label: 'Owners', icon: Users },
   ];
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar className="border-r border-sidebar-border/80 bg-sidebar/95 backdrop-blur">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
               <StrataPulseLogo className="h-6 w-6" />
             </div>
             <div className="flex flex-col">
-              <h2 className="font-headline text-lg font-semibold">
-                StrataPulse Pro
+              <h2 className="font-headline text-lg font-semibold tracking-tight">
+                StrataPulse
               </h2>
-              <p className="text-xs text-muted-foreground">Notice Workflow</p>
+              <p className="text-xs text-muted-foreground">Quiet notice workflow</p>
             </div>
           </div>
         </SidebarHeader>
@@ -94,13 +94,15 @@ function AuthStatus() {
   const { auth, user, isUserLoading } = useFirebase();
 
   if (isUserLoading) {
-    return <div className="text-xs text-muted-foreground">Auth loading...</div>;
+    return <div className="text-xs text-muted-foreground">Checking access...</div>;
   }
 
   if (user) {
     return (
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Logged in as {user.isAnonymous ? 'Anonymous' : user.email}</span>
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <div className="rounded-xl border border-sidebar-border/80 bg-white/70 px-3 py-2">
+          Signed in as {user.isAnonymous ? 'Anonymous' : user.email}
+        </div>
         <Button variant="outline" size="sm" onClick={() => auth.signOut()}>
           Logout
         </Button>
@@ -152,14 +154,14 @@ function SystemStatus() {
   }, []);
 
   return (
-    <div className="flex items-center justify-between text-xs text-muted-foreground">
+    <div className="flex items-center justify-between rounded-xl border border-sidebar-border/80 bg-white/70 px-3 py-2 text-xs text-muted-foreground">
       <div className="flex items-center gap-2">
         <Activity className="h-4 w-4" />
-        <span>System Status</span>
+        <span>System</span>
       </div>
       <Badge
         variant={isOnline ? 'default' : 'destructive'}
-        className="bg-green-500 text-white data-[state=offline]:bg-red-500"
+        className="border-0 bg-primary/90 text-primary-foreground shadow-none data-[state=offline]:bg-destructive"
       >
         {isOnline ? 'Online' : 'Offline'}
       </Badge>

@@ -4,7 +4,7 @@ import { type DocumentData, type QueryDocumentSnapshot } from 'firebase-admin/fi
 
 import { getAdminFirestore, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
 import { deleteStoredAttachmentContents } from '@/lib/notice-attachments';
-import { type Attachment, type Property, type StrataNotice, type SyncLog, isPdfAttachment } from '@/lib/definitions';
+import { type Attachment, type Owner, type Property, type StrataNotice, type SyncLog, isPdfAttachment } from '@/lib/definitions';
 
 type NoticeListOptions = {
   status?: StrataNotice['status'][];
@@ -156,6 +156,21 @@ function mapFirestoreProperty(doc: QueryDocumentSnapshot<DocumentData>): Propert
     postal_code: typeof data.postal_code === 'string' ? data.postal_code : '',
     plan_code: typeof data.plan_code === 'string' ? data.plan_code : null,
     unit_number: typeof data.unit_number === 'string' ? data.unit_number : null,
+  };
+}
+
+function mapFirestoreOwner(doc: QueryDocumentSnapshot<DocumentData>): Owner & { id: string } {
+  const data = doc.data();
+
+  return {
+    id: doc.id,
+    name: typeof data.name === 'string' ? data.name : 'Unknown Owner',
+    email: typeof data.email === 'string' ? data.email : null,
+    properties: asStringArray(data.properties),
+    planCodes: asStringArray(data.planCodes),
+    unitNumbers: asStringArray(data.unitNumbers),
+    propertyIds: asStringArray(data.propertyIds),
+    source: data.source === 'buildium' ? 'buildium' : 'manual',
   };
 }
 
@@ -366,6 +381,17 @@ export async function getStoredProperties(): Promise<Property[]> {
       unit_number: row.unit_number ?? null,
     })) as Property[];
   });
+}
+
+export async function getStoredOwners(): Promise<Array<Owner & { id: string }>> {
+  if (!hasFirebaseAdminConfig()) {
+    return [];
+  }
+
+  const snapshot = await getAdminFirestore().collection('owners').get();
+  return snapshot.docs
+    .map(mapFirestoreOwner)
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export async function createStoredNotice(id: string, notice: NoticeWriteInput): Promise<void> {
