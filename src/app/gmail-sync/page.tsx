@@ -6,9 +6,11 @@ import { requireAdminSession } from '@/lib/admin-session';
 export const dynamic = 'force-dynamic';
 
 export default async function GmailSyncPage() {
-  await requireAdminSession();
-  const logs = await getSyncLogs();
   const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
+  const logs = await getSyncLogs();
 
   return <GmailSyncClient logs={logs} demoMode={demoMode} />;
 }

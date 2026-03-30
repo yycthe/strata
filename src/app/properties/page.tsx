@@ -7,7 +7,10 @@ import { requireAdminSession } from '@/lib/admin-session';
 export const dynamic = 'force-dynamic';
 
 export default async function PropertiesPage() {
-  await requireAdminSession();
+  const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
   const properties: Property[] = await getProperties();
 
   return (

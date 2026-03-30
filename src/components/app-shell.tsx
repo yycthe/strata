@@ -144,13 +144,25 @@ function AuthStatus() {
 
   return (
     <div className="flex flex-col gap-2">
+      {isDemoMode && (
+        <>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Demo mode is on. You are viewing sample data only.
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/api/demo-mode?enable=0&redirect=/login`}>
+              Exit Demo
+            </Link>
+          </Button>
+        </>
+      )}
       <Button variant="outline" size="sm" asChild>
         <Link href="/login">
-          Go to Login
+          Sign In to Live Workspace
         </Link>
       </Button>
       <p className="px-1 text-[11px] leading-4 text-muted-foreground">
-        Access is now controlled by Firebase email/password sign-in only.
+        Live data requires Firebase sign-in. Demo mode stays separate and uses sample data only.
       </p>
     </div>
   );

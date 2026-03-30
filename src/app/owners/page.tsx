@@ -7,9 +7,11 @@ import { requireAdminSession } from '@/lib/admin-session';
 export const dynamic = 'force-dynamic';
 
 export default async function OwnersPage() {
-  await requireAdminSession();
-  const owners = await getOwners();
   const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
+  const owners = await getOwners();
   const importEnabled = hasFirebaseAdminConfig() && !demoMode;
 
   return (

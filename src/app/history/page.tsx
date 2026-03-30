@@ -4,11 +4,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { StrataNotice } from '@/lib/definitions';
 import { Badge } from '@/components/ui/badge';
 import { requireAdminSession } from '@/lib/admin-session';
+import { isDemoModeEnabled } from '@/lib/demo-session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HistoryPage() {
-  await requireAdminSession();
+  const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
   const notices: StrataNotice[] = await getNotices({ status: ['Dispatched'] });
 
   return (

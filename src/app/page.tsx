@@ -6,9 +6,11 @@ import { requireAdminSession } from '@/lib/admin-session';
 export const dynamic = 'force-dynamic';
 
 export default async function OverviewPage() {
-  await requireAdminSession();
-  const initialStats = await getDashboardStats();
   const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
+  const initialStats = await getDashboardStats();
 
   return <DashboardClient initialStats={initialStats} demoMode={demoMode} />;
 }

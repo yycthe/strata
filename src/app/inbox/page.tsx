@@ -6,10 +6,12 @@ import { requireAdminSession } from '@/lib/admin-session';
 export const dynamic = 'force-dynamic';
 
 export default async function InboxPage() {
-  await requireAdminSession();
+  const demoMode = await isDemoModeEnabled();
+  if (!demoMode) {
+    await requireAdminSession();
+  }
   // Fetch notices for the inbox queue
   const notices = await getNotices({ status: ['New', 'Ready', 'Review'] });
-  const demoMode = await isDemoModeEnabled();
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
