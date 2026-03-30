@@ -30,7 +30,9 @@ export function middleware(request: NextRequest) {
   const expectedPassword = process.env.APP_BASIC_AUTH_PASSWORD;
 
   if (!expectedUsername || !expectedPassword) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-strata-basic-auth', 'disabled');
+    return response;
   }
 
   const credentials = decodeBasicAuth(request.headers.get('authorization') || '');
@@ -39,7 +41,9 @@ export function middleware(request: NextRequest) {
     credentials?.password === expectedPassword;
 
   if (isAuthorized) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-strata-basic-auth', 'enabled');
+    return response;
   }
 
   return new NextResponse('Authentication required.', {
@@ -50,7 +54,8 @@ export function middleware(request: NextRequest) {
   });
 }
 
+export const runtime = 'nodejs';
+
 export const config = {
-  runtime: 'nodejs',
   matcher: ['/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)'],
 };
