@@ -11,16 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import type { BuildiumImportStats } from '@/lib/buildium-import';
 
 type OwnersClientProps = {
   initialOwners: Array<Owner & { id: string }>;
   importEnabled: boolean;
-};
-
-type ImportStats = {
-  properties: number;
-  owners: number;
-  unresolvedPlanCodes: number;
 };
 
 export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps) {
@@ -29,7 +24,7 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [lastImportStats, setLastImportStats] = useState<ImportStats | null>(null);
+  const [lastImportStats, setLastImportStats] = useState<BuildiumImportStats | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
   const owners = initialOwners;
@@ -87,8 +82,8 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
       toast({
         title: 'Import complete',
         description:
-          payload.stats.unresolvedPlanCodes > 0
-            ? `Imported ${payload.stats.properties} properties and ${payload.stats.owners} owner groups. ${payload.stats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`
+          payload.stats.propertiesWithoutStrataNumber > 0
+            ? `Imported ${payload.stats.properties} properties and ${payload.stats.owners} owner groups. ${payload.stats.propertiesWithoutStrataNumber} rows have no strata number, but their owner and address were still saved.`
             : `Imported ${payload.stats.properties} properties and ${payload.stats.owners} owner groups.`,
       });
     } catch (error: any) {
@@ -109,7 +104,7 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
       <section className="space-y-3">
         <div className="max-w-2xl space-y-2">
           <p className="text-sm text-muted-foreground">
-            Import one Buildium property export and the platform will normalize plan codes and unit numbers so each notice can match the right owner group.
+            Import one Buildium property export and the platform will normalize locator codes, strata plan codes, and unit numbers so each notice can match the right owner group.
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -118,7 +113,7 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
             <div className="mt-2 text-2xl font-semibold tracking-tight">{owners.length}</div>
           </div>
           <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Plan-coded</div>
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">With strata</div>
             <div className="mt-2 text-2xl font-semibold tracking-tight">{summary.ownersWithPlanCodes}</div>
           </div>
           <div className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3">
@@ -161,7 +156,7 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
               <div className="min-w-0">
                 <div className="font-medium tracking-tight">Choose Buildium export</div>
                 <div className="text-sm text-muted-foreground">
-                  Supports the property export CSV you shared. We extract strata plan and unit from each row.
+                  Supports the property export CSV you shared. We extract the leading locator code, strata plan, and unit from each row.
                 </div>
               </div>
             </div>
@@ -205,7 +200,12 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
               <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />
               <div>
                 Imported {lastImportStats.properties} properties and {lastImportStats.owners} owner groups.
-                {lastImportStats.unresolvedPlanCodes > 0 && ` ${lastImportStats.unresolvedPlanCodes} rows still need manual plan-code cleanup.`}
+                {' '}
+                {lastImportStats.propertiesWithStrataNumber} rows have a strata number.
+                {' '}
+                {lastImportStats.propertiesWithoutStrataNumber > 0
+                  ? `${lastImportStats.propertiesWithoutStrataNumber} rows are missing a strata number, so they were kept with owner and address only.`
+                  : 'No rows were missing a strata number.'}
               </div>
             </div>
           )}
@@ -224,7 +224,7 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Plan / Unit</TableHead>
+                <TableHead>Locator / Strata / Unit</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Properties</TableHead>
               </TableRow>
@@ -249,9 +249,14 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
                   </TableCell>
                   <TableCell className="align-top">
                     <div className="flex flex-wrap gap-2">
+                      {(owner.locatorCodes ?? []).slice(0, 3).map((locatorCode) => (
+                        <Badge key={`${owner.id}-locator-${locatorCode}`} variant="secondary">
+                          {locatorCode}
+                        </Badge>
+                      ))}
                       {(owner.planCodes ?? []).map((planCode) => (
                         <Badge key={`${owner.id}-${planCode}`} variant="outline">
-                          {planCode}
+                          Strata {planCode}
                         </Badge>
                       ))}
                       {(owner.unitNumbers ?? []).slice(0, 3).map((unit) => (
@@ -259,6 +264,9 @@ export function OwnersClient({ initialOwners, importEnabled }: OwnersClientProps
                           Unit {unit}
                         </Badge>
                       ))}
+                      {(owner.planCodes ?? []).length === 0 && (
+                        <Badge variant="outline">Strata empty</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="align-top text-muted-foreground">

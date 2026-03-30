@@ -42,6 +42,16 @@ function cleanText(text: string): string {
   return cleaned;
 }
 
+function buildEmailSearchText(input: {
+  subject?: string | null;
+  fromText?: string | null;
+  bodyText?: string | null;
+}): string {
+  return [input.subject || '', input.fromText || '', cleanText(input.bodyText || '')]
+    .join('\n')
+    .trim();
+}
+
 // --- GMAIL SYNC ACTION ---
 
 const syncGmailSchema = z.object({
@@ -95,7 +105,7 @@ export async function syncGmail(
     logger: false, // Set to true for detailed IMAP logs
   });
 
-  const stats = { found: 0, matched: 0, inserted: 0, skipped: 0 };
+  const stats = { found: 0, matched: 0, inserted: 0, skipped: 0, noStrata: 0 };
   const logInfo = {
     timestamp: new Date().toISOString(),
     window: daysBack,
@@ -126,50 +136,60 @@ export async function syncGmail(
         }
 
         const parsed = await simpleParser(message.source);
-        const cleanedContent = cleanText(parsed.text || '');
-        const searchText = `${parsed.subject || ''}\n${parsed.from?.text || ''}\n${cleanedContent}`;
-        
+        // Email notice detection only relies on subject + sender + text body.
+        // We intentionally do not use Buildium locator codes such as B5263 or
+        // 12-2-084 here. A message becomes a strata notice only if we can
+        // extract a real strata number like EPS3494, BCS3801, LMS4650, VR2540,
+        // or VAS2813 from the email text.
+        const searchText = buildEmailSearchText({
+          subject: parsed.subject,
+          fromText: parsed.from?.text,
+          bodyText: parsed.text,
+        });
         const planCodes = extractStrataPlanCodes(searchText);
 
-        if (planCodes.length > 0) {
-          stats.matched++;
-          
-          const attachments = await Promise.all(
-            parsed.attachments.map((attachment) =>
-              persistParsedAttachment(noticeId, {
-                cid: attachment.cid,
-                checksum: attachment.checksum,
-                filename: attachment.filename,
-                contentType: attachment.contentType,
-                size: attachment.size,
-                content: attachment.content,
-              })
-            )
-          );
-
-          if (existingNotice) {
-            await updateStoredNotice(noticeId, { attachments });
-            stats.skipped++;
-            continue;
-          }
-
-          await createStoredNotice(noticeId, {
-            subject: parsed.subject || 'No Subject',
-            sender: parsed.from?.text || 'Unknown Sender',
-            receivedAt: (parsed.date || new Date()).toISOString(),
-            content: parsed.text || '',
-            status: 'New',
-            planCode: planCodes[0] ?? null,
-            allPlanCodes: planCodes,
-            aiSummary: null,
-            audience: null,
-            attachments,
-            assignedOwnerId: null,
-            assignedOwnerIds: null,
-            ownerMessage: null,
-          });
-          stats.inserted++;
+        if (planCodes.length === 0) {
+          stats.noStrata++;
+          continue;
         }
+
+        stats.matched++;
+
+        const attachments = await Promise.all(
+          parsed.attachments.map((attachment) =>
+            persistParsedAttachment(noticeId, {
+              cid: attachment.cid,
+              checksum: attachment.checksum,
+              filename: attachment.filename,
+              contentType: attachment.contentType,
+              size: attachment.size,
+              content: attachment.content,
+            })
+          )
+        );
+
+        if (existingNotice) {
+          await updateStoredNotice(noticeId, { attachments });
+          stats.skipped++;
+          continue;
+        }
+
+        await createStoredNotice(noticeId, {
+          subject: parsed.subject || 'No Subject',
+          sender: parsed.from?.text || 'Unknown Sender',
+          receivedAt: (parsed.date || new Date()).toISOString(),
+          content: parsed.text || '',
+          status: 'New',
+          planCode: planCodes[0] ?? null,
+          allPlanCodes: planCodes,
+          aiSummary: null,
+          audience: null,
+          attachments,
+          assignedOwnerId: null,
+          assignedOwnerIds: null,
+          ownerMessage: null,
+        });
+        stats.inserted++;
       }
     } finally {
       lock.release();
@@ -206,7 +226,7 @@ export async function syncGmail(
   revalidatePath('/inbox');
   return {
     status: 'success',
-    message: `Sync complete. Found: ${stats.found}, Matched: ${stats.matched}, Inserted: ${stats.inserted}.`,
+    message: `Sync complete. Scanned: ${stats.found}, With strata number: ${stats.matched}, New notices: ${stats.inserted}, No strata number: ${stats.noStrata}.`,
     stats,
   };
 }

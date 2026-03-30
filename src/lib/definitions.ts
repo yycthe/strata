@@ -20,6 +20,7 @@ export type Owner = {
   email: string | null;
   properties: string[]; // e.g., ["BCS-1234 - 101", "EPS-5678 - 202"]
   planCodes?: string[];
+  locatorCodes?: string[];
   unitNumbers?: string[];
   propertyIds?: string[];
   source?: 'manual' | 'buildium';
@@ -28,6 +29,8 @@ export type Owner = {
 export type Property = {
     id: string;
     name: string;
+    locator_code: string | null;
+    owner_name: string;
     address_1: string;
     city: string;
     state: string;
@@ -85,6 +88,7 @@ export type SyncResult = {
     matched: number;
     inserted: number;
     skipped: number;
+    noStrata: number;
   };
 };
 

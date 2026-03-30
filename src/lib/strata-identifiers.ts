@@ -1,4 +1,7 @@
-const strataPlanRegex = /(EPS|BCS|LMS|VR|VAS)\s*-?\s*(\d{2,6})/gi;
+// Based on the Buildium export we received, real strata plan identifiers only
+// use these prefixes and appear in 3-5 digit forms such as EPS3494, EPS 5421,
+// BCS 890, LMS3094, VR2540, and VAS2813.
+const strataPlanRegex = /(EPS|BCS|LMS|VR|VAS)\s*-?\s*(\d{3,5})(?!\d)/gi;
 
 export function extractStrataPlanCodes(text: string): string[] {
   const matches = text.matchAll(strataPlanRegex);

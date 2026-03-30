@@ -150,6 +150,8 @@ function mapFirestoreProperty(doc: QueryDocumentSnapshot<DocumentData>): Propert
   return {
     id: doc.id,
     name: typeof data.name === 'string' ? data.name : '',
+    locator_code: typeof data.locator_code === 'string' ? data.locator_code : null,
+    owner_name: typeof data.owner_name === 'string' ? data.owner_name : '',
     address_1: typeof data.address_1 === 'string' ? data.address_1 : '',
     city: typeof data.city === 'string' ? data.city : '',
     state: typeof data.state === 'string' ? data.state : '',
@@ -168,6 +170,7 @@ function mapFirestoreOwner(doc: QueryDocumentSnapshot<DocumentData>): Owner & { 
     email: typeof data.email === 'string' ? data.email : null,
     properties: asStringArray(data.properties),
     planCodes: asStringArray(data.planCodes),
+    locatorCodes: asStringArray(data.locatorCodes),
     unitNumbers: asStringArray(data.unitNumbers),
     propertyIds: asStringArray(data.propertyIds),
     source: data.source === 'buildium' ? 'buildium' : 'manual',
@@ -373,6 +376,8 @@ export async function getStoredProperties(): Promise<Property[]> {
     return rows.map((row: any) => ({
       id: String(row.id),
       name: row.name,
+      locator_code: null,
+      owner_name: row.owner_name ?? '',
       address_1: row.address_1,
       city: row.city,
       state: row.state,

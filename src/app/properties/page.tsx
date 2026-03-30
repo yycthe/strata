@@ -23,26 +23,30 @@ export default async function PropertiesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Locator</TableHead>
+                <TableHead>Owner</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Plan Code</TableHead>
+                <TableHead>Strata Number</TableHead>
                 <TableHead>Unit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {properties.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No properties imported yet.
                   </TableCell>
                 </TableRow>
               )}
               {properties.map((prop) => (
                 <TableRow key={prop.id}>
+                  <TableCell>{prop.locator_code || '—'}</TableCell>
+                  <TableCell>{prop.owner_name || '—'}</TableCell>
                   <TableCell>{prop.name}</TableCell>
-                  <TableCell>{`${prop.address_1}, ${prop.city}`}</TableCell>
-                  <TableCell>{prop.plan_code}</TableCell>
-                  <TableCell>{prop.unit_number}</TableCell>
+                  <TableCell>{[prop.address_1, prop.city].filter(Boolean).join(', ') || '—'}</TableCell>
+                  <TableCell>{prop.plan_code || '—'}</TableCell>
+                  <TableCell>{prop.unit_number || '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

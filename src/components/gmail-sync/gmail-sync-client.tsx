@@ -53,10 +53,11 @@ function SyncForm() {
                 {state.message}
                 {state.stats && (
                   <div className="mt-2 text-xs">
-                    <p>Found: {state.stats.found}</p>
-                    <p>Matched: {state.stats.matched}</p>
-                    <p>Inserted: {state.stats.inserted}</p>
-                    <p>Skipped: {state.stats.skipped}</p>
+                    <p>Emails scanned: {state.stats.found}</p>
+                    <p>With strata number: {state.stats.matched}</p>
+                    <p>New notices added: {state.stats.inserted}</p>
+                    <p>Already existed or PDF-only backfill: {state.stats.skipped}</p>
+                    <p>No strata number: {state.stats.noStrata}</p>
                   </div>
                 )}
               </AlertDescription>
@@ -81,6 +82,9 @@ export function GmailSyncClient({ logs }: { logs: SyncLog[] }) {
         <Card>
           <CardHeader>
             <CardTitle>Recent Sync Logs</CardTitle>
+            <CardDescription>
+              `Found` means emails scanned, and `Inserted` means new notices actually added to the platform.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -88,8 +92,8 @@ export function GmailSyncClient({ logs }: { logs: SyncLog[] }) {
                 <TableRow>
                   <TableHead>Timestamp</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Found</TableHead>
-                  <TableHead>Inserted</TableHead>
+                  <TableHead>Emails Scanned</TableHead>
+                  <TableHead>New Notices</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
