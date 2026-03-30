@@ -1,6 +1,6 @@
 'use client';
 
-import { firebaseConfig } from '@/firebase/config';
+import { getFirebaseClientConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
@@ -22,7 +22,7 @@ export function initializeFirebase() {
       if (process.env.NODE_ENV === "production") {
         console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
       }
-      firebaseApp = initializeApp(firebaseConfig);
+      firebaseApp = initializeApp(getFirebaseClientConfig());
     }
 
     return getSdks(firebaseApp);

@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Property } from '@/lib/definitions';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PropertiesPage() {
   const properties: Property[] = await getProperties();
 

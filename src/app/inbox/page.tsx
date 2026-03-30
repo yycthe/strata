@@ -1,6 +1,8 @@
 import { getNotices } from '@/lib/data';
 import { InboxClient } from '@/components/inbox/inbox-client';
 
+export const dynamic = 'force-dynamic';
+
 export default async function InboxPage() {
   // Fetch notices for the inbox queue
   const notices = await getNotices({ status: ['New', 'Ready', 'Review'] });

@@ -4,6 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { StrataNotice } from '@/lib/definitions';
 import { Badge } from '@/components/ui/badge';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HistoryPage() {
   const notices: StrataNotice[] = await getNotices({ status: ['Dispatched'] });
 

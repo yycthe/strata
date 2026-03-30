@@ -22,7 +22,7 @@ export type Owner = {
 };
 
 export type Property = {
-    id: number;
+    id: string;
     name: string;
     address_1: string;
     city: string;
@@ -59,7 +59,7 @@ export type Audience = {
 };
 
 export type SyncLog = {
-    id: number;
+    id: string;
     timestamp: string;
     window: number;
     status: 'success' | 'fail';

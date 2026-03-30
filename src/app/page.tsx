@@ -1,15 +1,10 @@
-import { getLastSyncStatus, getNoticesCount } from '@/lib/data';
+import { getDashboardStats } from '@/lib/data';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
 
-export default async function OverviewPage() {
-  const [pending, ready, dispatched, sync] = await Promise.all([
-    getNoticesCount(['New', 'Review']),
-    getNoticesCount(['Ready']),
-    getNoticesCount(['Dispatched']),
-    getLastSyncStatus(),
-  ]);
+export const dynamic = 'force-dynamic';
 
-  const initialStats = { pending, ready, dispatched, sync };
+export default async function OverviewPage() {
+  const initialStats = await getDashboardStats();
 
   return <DashboardClient initialStats={initialStats} />;
 }

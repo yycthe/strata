@@ -39,6 +39,7 @@ next-env.d.ts
 
 .genkit/*
 .env*
+workflow.db*
 
 # firebase
 firebase-debug.log

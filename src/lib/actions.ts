@@ -3,23 +3,19 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import db from './db';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categorize-notice-flow';
 import { generateOwnerMessage } from '@/ai/flows/generate-owner-message-flow';
 import type { SyncResult } from './definitions';
-
-// A helper to safely parse JSON from the database.
-function safeJsonParse<T>(jsonString: string | null | undefined, defaultValue: T): T {
-  if (!jsonString) return defaultValue;
-  try {
-    return JSON.parse(jsonString) as T;
-  } catch (e) {
-    console.error('Failed to parse JSON:', e);
-    return defaultValue;
-  }
-}
+import {
+  createStoredNotice,
+  createStoredSyncLog,
+  deleteStoredNotice,
+  deleteStoredNotices,
+  getStoredNoticeById,
+  updateStoredNotice,
+} from './server-store';
 
 // --- Text Cleaning and Matching ---
 
@@ -70,7 +66,7 @@ export async function syncGmail(
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     return {
       status: 'error',
-      message: 'Gmail credentials are not configured in the .env file. Please add GMAIL_USER and GMAIL_APP_PASSWORD.',
+      message: 'Gmail credentials are not configured in the environment variables. Please add GMAIL_USER and GMAIL_APP_PASSWORD.',
     };
   }
 
@@ -117,7 +113,8 @@ export async function syncGmail(
       for await (let message of messages) {
         stats.found++;
         
-        const existingNotice = db.prepare('SELECT id FROM notices WHERE id = ?').get(message.uid);
+        const noticeId = String(message.uid);
+        const existingNotice = await getStoredNoticeById(noticeId);
         if (existingNotice) {
           stats.skipped++;
           continue;
@@ -139,19 +136,21 @@ export async function syncGmail(
             size: att.size,
           }));
 
-          db.prepare(
-            `INSERT INTO notices (id, subject, sender, receivedAt, content, allPlanCodes, planCode, attachments, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New')`
-          ).run(
-            message.uid,
-            parsed.subject || 'No Subject',
-            parsed.from?.text || 'Unknown Sender',
-            (parsed.date || new Date()).toISOString(),
-            parsed.text, // Store original text for viewing
-            JSON.stringify(planCodes),
-            planCodes[0],
-            JSON.stringify(attachments)
-          );
+          await createStoredNotice(noticeId, {
+            subject: parsed.subject || 'No Subject',
+            sender: parsed.from?.text || 'Unknown Sender',
+            receivedAt: (parsed.date || new Date()).toISOString(),
+            content: parsed.text || '',
+            status: 'New',
+            planCode: planCodes[0] ?? null,
+            allPlanCodes: planCodes,
+            aiSummary: null,
+            audience: null,
+            attachments,
+            assignedOwnerId: null,
+            assignedOwnerIds: null,
+            ownerMessage: null,
+          });
           stats.inserted++;
         }
       }
@@ -167,10 +166,22 @@ export async function syncGmail(
       message: `Sync failed: ${err.message}`,
     };
   } finally {
-    await client.logout();
-    db.prepare(
-        'INSERT INTO sync_logs (timestamp, window, status, found, inserted, skipped, matched, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(logInfo.timestamp, logInfo.window, logInfo.status, stats.found, stats.inserted, stats.skipped, stats.matched, logInfo.error);
+    try {
+      await client.logout();
+    } catch (logoutError) {
+      console.warn('Gmail logout failed:', logoutError);
+    }
+
+    await createStoredSyncLog({
+      timestamp: logInfo.timestamp,
+      window: logInfo.window,
+      status: logInfo.status,
+      found: stats.found,
+      inserted: stats.inserted,
+      skipped: stats.skipped,
+      matched: stats.matched,
+      error: logInfo.error,
+    });
     revalidatePath('/gmail-sync');
     revalidatePath('/');
   }
@@ -192,7 +203,7 @@ export async function runAiTriage(noticeId: string, content: string) {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('Gemini API key is not configured in the .env file.');
+    throw new Error('Gemini API key is not configured in the environment variables.');
   }
 
   try {
@@ -201,9 +212,12 @@ export async function runAiTriage(noticeId: string, content: string) {
     // Also generate the owner message from the summary
     const ownerMessage = await generateOwnerMessage(summary);
 
-    db.prepare(
-      `UPDATE notices SET aiSummary = ?, audience = ?, ownerMessage = ?, status = 'Ready' WHERE id = ?`
-    ).run(JSON.stringify(summary), JSON.stringify(audience), ownerMessage, noticeId);
+    await updateStoredNotice(noticeId, {
+      aiSummary: summary,
+      audience,
+      ownerMessage,
+      status: 'Ready',
+    });
 
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
@@ -211,7 +225,7 @@ export async function runAiTriage(noticeId: string, content: string) {
   } catch (err: any) {
     console.error('AI Triage failed:', err);
     // Optionally update status to 'Review' on failure
-    db.prepare(`UPDATE notices SET status = 'Review' WHERE id = ?`).run(noticeId);
+    await updateStoredNotice(noticeId, { status: 'Review' });
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     throw new Error(`AI Triage failed: ${err.message}`);
@@ -223,37 +237,41 @@ export async function runAiTriage(noticeId: string, content: string) {
 
 export async function deleteNotices(ids: string[]) {
   if (ids.length === 0) return;
-  const stmt = db.prepare('DELETE FROM notices WHERE id = ?');
-  const transact = db.transaction((idList) => {
-    for (const id of idList) stmt.run(id);
-  });
-  transact(ids);
+  await deleteStoredNotices(ids);
   revalidatePath('/inbox');
   revalidatePath('/history');
 }
 
 export async function deleteSingleNotice(id: string) {
-  db.prepare('DELETE FROM notices WHERE id = ?').run(id);
+  await deleteStoredNotice(id);
   revalidatePath('/inbox');
   revalidatePath('/history');
   redirect('/inbox');
 }
 
 export async function markNoticeAsIgnored(id: string) {
-  db.prepare(`UPDATE notices SET status = 'Ignored' WHERE id = ?`).run(id);
+  await updateStoredNotice(id, { status: 'Ignored' });
   revalidatePath('/inbox');
   revalidatePath(`/inbox/${id}`);
 }
 
 export async function dispatchNotice(noticeId: string, ownerId: string) {
-    db.prepare(`UPDATE notices SET status = 'Dispatched', assignedOwnerId = ? WHERE id = ?`).run(ownerId, noticeId);
+    await updateStoredNotice(noticeId, {
+      status: 'Dispatched',
+      assignedOwnerId: ownerId,
+      assignedOwnerIds: null,
+    });
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     revalidatePath('/history');
 }
 
 export async function dispatchGroupNotice(noticeId: string, ownerIds: string[]) {
-    db.prepare(`UPDATE notices SET status = 'Dispatched', assignedOwnerIds = ? WHERE id = ?`).run(JSON.stringify(ownerIds), noticeId);
+    await updateStoredNotice(noticeId, {
+      status: 'Dispatched',
+      assignedOwnerId: null,
+      assignedOwnerIds: ownerIds,
+    });
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     revalidatePath('/history');
