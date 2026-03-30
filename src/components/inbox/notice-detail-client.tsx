@@ -1,7 +1,14 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import type { StrataNotice, AISummary, Audience, Owner } from '@/lib/definitions';
+import {
+  type StrataNotice,
+  type AISummary,
+  type Audience,
+  type Owner,
+  attachmentHasStoredContent,
+  isPdfAttachment,
+} from '@/lib/definitions';
 import {
   Card,
   CardContent,
@@ -23,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Bot, CheckCircle, Mail, Target, Trash2, Zap } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle, Download, FileText, Mail, Target, Trash2, Zap } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, WithId } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -192,6 +199,98 @@ function OwnerMessageCard({ message }: { message: string | null }) {
     );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function AttachmentCard({ notice }: { notice: StrataNotice }) {
+    const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
+    const previewAttachment = notice.attachments.find((attachment) => attachment.id === previewAttachmentId) ?? null;
+
+    if (notice.attachments.length === 0) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><FileText /> Attachments</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground">No attachments were detected on this notice.</p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><FileText /> Attachments</CardTitle>
+                    <CardDescription>PDF files can be previewed here and will be included in dispatch emails.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {notice.attachments.map((attachment) => {
+                        const isPdf = isPdfAttachment(attachment);
+                        const isStored = attachmentHasStoredContent(attachment);
+                        const attachmentUrl = `/api/notices/${encodeURIComponent(notice.id)}/attachments/${encodeURIComponent(attachment.id)}`;
+
+                        return (
+                            <div key={attachment.id} className="rounded-lg border p-3">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="space-y-1">
+                                        <div className="font-medium">{attachment.filename}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {attachment.contentType} · {formatBytes(attachment.size)}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {isPdf && <Badge variant="secondary">PDF</Badge>}
+                                        {!isPdf && <Badge variant="outline">Metadata only</Badge>}
+                                        {isPdf && !isStored && <Badge variant="destructive">PDF not fetched yet</Badge>}
+                                    </div>
+                                </div>
+
+                                {isPdf && isStored && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setPreviewAttachmentId(attachment.id)}>
+                                            Preview PDF
+                                        </Button>
+                                        <Button type="button" variant="ghost" size="sm" asChild>
+                                            <a href={`${attachmentUrl}?download=1`} target="_blank" rel="noreferrer">
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Download
+                                            </a>
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </CardContent>
+            </Card>
+
+            <Dialog open={Boolean(previewAttachment)} onOpenChange={(open) => !open && setPreviewAttachmentId(null)}>
+                <DialogContent className="max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>{previewAttachment?.filename ?? 'PDF Preview'}</DialogTitle>
+                        <DialogDescription>
+                            This is the PDF fetched from the original Gmail notice.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {previewAttachment && (
+                        <iframe
+                            title={previewAttachment.filename}
+                            src={`/api/notices/${encodeURIComponent(notice.id)}/attachments/${encodeURIComponent(previewAttachment.id)}`}
+                            className="h-[70vh] w-full rounded-md border"
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
 
 function findRecommendedOwners(notice: StrataNotice, allOwners: WithId<Owner>[] | null): WithId<Owner>[] {
   if (!notice.audience || !allOwners) {
@@ -231,16 +330,18 @@ function findRecommendedOwners(notice: StrataNotice, allOwners: WithId<Owner>[] 
 }
 
 function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice: StrataNotice; owners: WithId<Owner>[]; onDispatch: () => void; isDispatching: boolean; }) {
+    const pdfAttachments = notice.attachments.filter((attachment) => isPdfAttachment(attachment));
+
     return (
         <DialogContent className="max-w-3xl">
             <DialogHeader>
                 <DialogTitle>Confirm Notice Dispatch</DialogTitle>
                 <DialogDescription>
-                    Review the recommended recipients and the AI-generated message. The notice will be marked as dispatched.
+                    Review the recommended recipients, the AI-generated message, and any PDF attachments that will be sent out.
                 </DialogDescription>
             </DialogHeader>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <p className="text-sm font-medium">Message to Owners</p>
                  <div className="rounded-md border p-4 mt-2 min-h-[250px]">
@@ -279,6 +380,26 @@ function DispatchDialog({ notice, owners, onDispatch, isDispatching }: { notice:
                         </ScrollArea>
                     </CardContent>
                 </Card>
+                <div className="mt-4">
+                    <p className="text-sm font-medium">PDF Attachments ({pdfAttachments.length})</p>
+                    <Card className="mt-2">
+                        <CardContent className="space-y-2 p-4 text-sm">
+                            {pdfAttachments.length > 0 ? pdfAttachments.map((attachment) => (
+                                <div key={attachment.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
+                                    <div>
+                                        <div className="font-medium">{attachment.filename}</div>
+                                        <div className="text-xs text-muted-foreground">{formatBytes(attachment.size)}</div>
+                                    </div>
+                                    <Badge variant={attachmentHasStoredContent(attachment) ? 'secondary' : 'destructive'}>
+                                        {attachmentHasStoredContent(attachment) ? 'Will send' : 'Missing file'}
+                                    </Badge>
+                                </div>
+                            )) : (
+                                <p className="text-muted-foreground">No PDF attachments will be included with this dispatch.</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
               </div>
             </div>
 
@@ -309,6 +430,13 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
   const { data: allOwners } = useCollection<Owner>(ownersQuery);
 
   const recommendedOwners = useMemo(() => findRecommendedOwners(notice, allOwners), [notice, allOwners]);
+  const hasMissingPdfAttachment = useMemo(
+    () =>
+      notice.attachments.some(
+        (attachment) => isPdfAttachment(attachment) && !attachmentHasStoredContent(attachment)
+      ),
+    [notice.attachments]
+  );
 
   const isActionable = notice.status === 'New' || notice.status === 'Ready' || notice.status === 'Review';
 
@@ -335,11 +463,39 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
       toast({ variant: 'destructive', title: 'No recipients found', description: 'Cannot dispatch notice to zero owners.' });
       return;
     }
+    if (hasMissingPdfAttachment) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF missing',
+        description: 'At least one PDF attachment was detected but not fetched. Re-sync this notice before dispatching.',
+      });
+      return;
+    }
     startTransition(async () => {
-      const ownerIds = recommendedOwners.map(o => o.id);
-      await dispatchGroupNotice(notice.id, ownerIds);
-      setIsDispatchDialogOpen(false); // Close dialog on success
-      toast({ title: 'Notice Dispatched', description: `Notice has been dispatched to ${ownerIds.length} owners.` });
+      try {
+        const result = await dispatchGroupNotice(
+          notice.id,
+          recommendedOwners.map((owner) => ({
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+          }))
+        );
+        setIsDispatchDialogOpen(false);
+        toast({
+          title: 'Notice Dispatched',
+          description:
+            result.pdfAttachments > 0
+              ? `Message sent to ${result.recipients} owners with ${result.pdfAttachments} PDF attachment(s).`
+              : `Message sent to ${result.recipients} owners.`,
+        });
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'Dispatch failed',
+          description: error.message || 'An unknown error occurred while sending the notice.',
+        });
+      }
     });
   };
 
@@ -362,6 +518,7 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
     <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
             <OwnerMessageCard message={notice.ownerMessage} />
+            <AttachmentCard notice={notice} />
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-start">
@@ -380,14 +537,14 @@ export function NoticeDetailClient({ notice }: { notice: StrataNotice }) {
                     </ScrollArea>
                 </CardContent>
             </Card>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
                  <Button onClick={handleAiTriage} disabled={!['New', 'Review'].includes(notice.status) || isPending}>
                     <Zap className="mr-2 h-4 w-4" />
                     Run AI Triage
                 </Button>
                 <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button disabled={!isActionable || isPending || !allOwners || !notice.ownerMessage}>Dispatch Notice</Button>
+                        <Button disabled={!isActionable || isPending || !allOwners || !notice.ownerMessage || hasMissingPdfAttachment}>Dispatch Notice</Button>
                     </DialogTrigger>
                     {allOwners && (
                         <DispatchDialog 

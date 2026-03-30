@@ -37,6 +37,9 @@ export type Attachment = {
   filename: string;
   contentType: string;
   size: number;
+  isPdf: boolean;
+  storagePath: string | null;
+  localPath: string | null;
 };
 
 export type AISummary = {
@@ -80,3 +83,18 @@ export type SyncResult = {
     skipped: number;
   };
 };
+
+export function isPdfAttachment(attachment: Pick<Attachment, 'filename' | 'contentType' | 'isPdf'>): boolean {
+  if (attachment.isPdf) {
+    return true;
+  }
+
+  const filename = attachment.filename.toLowerCase();
+  return attachment.contentType === 'application/pdf' || filename.endsWith('.pdf');
+}
+
+export function attachmentHasStoredContent(
+  attachment: Pick<Attachment, 'storagePath' | 'localPath'>
+): boolean {
+  return Boolean(attachment.storagePath || attachment.localPath);
+}

@@ -40,6 +40,7 @@ next-env.d.ts
 .genkit/*
 .env*
 workflow.db*
+.attachment-cache/
 
 # firebase
 firebase-debug.log

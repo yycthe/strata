@@ -3,7 +3,8 @@ import 'server-only';
 import { type DocumentData, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 import { getAdminFirestore, hasFirebaseAdminConfig } from '@/lib/firebase-admin';
-import type { Property, StrataNotice, SyncLog } from '@/lib/definitions';
+import { deleteStoredAttachmentContents } from '@/lib/notice-attachments';
+import { type Attachment, type Property, type StrataNotice, type SyncLog, isPdfAttachment } from '@/lib/definitions';
 
 type NoticeListOptions = {
   status?: StrataNotice['status'][];
@@ -72,6 +73,40 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
+function normalizeAttachment(value: unknown): Attachment | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const attachment = value as Record<string, unknown>;
+  const filename = typeof attachment.filename === 'string' ? attachment.filename : 'untitled';
+  const contentType = typeof attachment.contentType === 'string' ? attachment.contentType : 'application/octet-stream';
+
+  return {
+    id: typeof attachment.id === 'string' ? attachment.id : filename,
+    filename,
+    contentType,
+    size: typeof attachment.size === 'number' ? attachment.size : Number(attachment.size ?? 0),
+    isPdf: isPdfAttachment({
+      filename,
+      contentType,
+      isPdf: attachment.isPdf === true,
+    }),
+    storagePath: typeof attachment.storagePath === 'string' ? attachment.storagePath : null,
+    localPath: typeof attachment.localPath === 'string' ? attachment.localPath : null,
+  };
+}
+
+function normalizeAttachments(value: unknown): Attachment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeAttachment)
+    .filter((attachment): attachment is Attachment => attachment !== null);
+}
+
 function mapFirestoreNotice(doc: QueryDocumentSnapshot<DocumentData>): StrataNotice {
   const data = doc.data();
 
@@ -86,7 +121,7 @@ function mapFirestoreNotice(doc: QueryDocumentSnapshot<DocumentData>): StrataNot
     allPlanCodes: asStringArray(data.allPlanCodes),
     aiSummary: (data.aiSummary ?? null) as StrataNotice['aiSummary'],
     audience: (data.audience ?? null) as StrataNotice['audience'],
-    attachments: Array.isArray(data.attachments) ? (data.attachments as StrataNotice['attachments']) : [],
+    attachments: normalizeAttachments(data.attachments),
     assignedOwnerId: typeof data.assignedOwnerId === 'string' ? data.assignedOwnerId : null,
     assignedOwnerIds: Array.isArray(data.assignedOwnerIds) ? asStringArray(data.assignedOwnerIds) : null,
     ownerMessage: typeof data.ownerMessage === 'string' ? data.ownerMessage : null,
@@ -136,7 +171,7 @@ function mapSqliteNotice(row: any): StrataNotice {
     allPlanCodes: safeJsonParse<string[]>(row.allPlanCodes, []),
     aiSummary: safeJsonParse<StrataNotice['aiSummary']>(row.aiSummary, null),
     audience: safeJsonParse<StrataNotice['audience']>(row.audience, null),
-    attachments: safeJsonParse<StrataNotice['attachments']>(row.attachments, []),
+    attachments: normalizeAttachments(safeJsonParse<StrataNotice['attachments']>(row.attachments, [])),
     assignedOwnerId: row.assignedOwnerId ?? null,
     assignedOwnerIds: safeJsonParse<StrataNotice['assignedOwnerIds']>(row.assignedOwnerIds, null),
     ownerMessage: row.ownerMessage ?? null,
@@ -417,20 +452,32 @@ export async function updateStoredNotice(id: string, updates: Partial<NoticeWrit
 }
 
 export async function deleteStoredNotice(id: string): Promise<void> {
+  const notice = await getStoredNoticeById(id);
+
   if (getStoreMode() === 'firestore') {
     await getAdminFirestore().collection('strataNotices').doc(id).delete();
+    if (notice) {
+      await deleteStoredAttachmentContents(notice.attachments);
+    }
     return;
   }
 
   await withSqlite((database) => {
     database.prepare('DELETE FROM notices WHERE id = ?').run(id);
   });
+
+  if (notice) {
+    await deleteStoredAttachmentContents(notice.attachments);
+  }
 }
 
 export async function deleteStoredNotices(ids: string[]): Promise<void> {
   if (ids.length === 0) {
     return;
   }
+
+  const notices = await Promise.all(ids.map((id) => getStoredNoticeById(id)));
+  const attachments = notices.flatMap((notice) => notice?.attachments ?? []);
 
   if (getStoreMode() === 'firestore') {
     const database = getAdminFirestore();
@@ -441,6 +488,7 @@ export async function deleteStoredNotices(ids: string[]): Promise<void> {
     });
 
     await batch.commit();
+    await deleteStoredAttachmentContents(attachments);
     return;
   }
 
@@ -452,4 +500,6 @@ export async function deleteStoredNotices(ids: string[]): Promise<void> {
 
     transaction(ids);
   });
+
+  await deleteStoredAttachmentContents(attachments);
 }

@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { cert, getApp, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage, type Storage } from 'firebase-admin/storage';
 
 type FirebaseAdminConfig = {
   projectId: string;
@@ -29,7 +30,19 @@ export function hasFirebaseAdminConfig(): boolean {
   return getFirebaseAdminConfig() !== null;
 }
 
-export function getAdminFirestore(): Firestore {
+function getFirebaseStorageBucketName(): string {
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+
+  if (!bucketName) {
+    throw new Error(
+      'Missing Firebase storage bucket environment variable. Set FIREBASE_STORAGE_BUCKET or NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET before fetching PDF attachments on the server.'
+    );
+  }
+
+  return bucketName;
+}
+
+export function getAdminApp(): App {
   const config = getFirebaseAdminConfig();
 
   if (!config) {
@@ -48,5 +61,17 @@ export function getAdminFirestore(): Firestore {
     });
   }
 
-  return getFirestore(getApp());
+  return getApp();
+}
+
+export function getAdminFirestore(): Firestore {
+  return getFirestore(getAdminApp());
+}
+
+export function getAdminStorage(): Storage {
+  return getStorage(getAdminApp());
+}
+
+export function getAdminStorageBucket() {
+  return getAdminStorage().bucket(getFirebaseStorageBucketName());
 }

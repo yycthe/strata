@@ -7,7 +7,8 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { summarizeAndCategorizeNotice } from '@/ai/flows/summarize-and-categorize-notice-flow';
 import { generateOwnerMessage } from '@/ai/flows/generate-owner-message-flow';
-import type { SyncResult } from './definitions';
+import { attachmentHasStoredContent, isPdfAttachment, type SyncResult } from './definitions';
+import { persistParsedAttachment } from './notice-attachments';
 import {
   createStoredNotice,
   createStoredSyncLog,
@@ -16,6 +17,7 @@ import {
   getStoredNoticeById,
   updateStoredNotice,
 } from './server-store';
+import { sendDispatchEmail } from './dispatch-email';
 
 // --- Text Cleaning and Matching ---
 
@@ -56,6 +58,14 @@ function matchStrataPlans(text: string): string[] {
 const syncGmailSchema = z.object({
   daysBack: z.number().min(1).max(90),
 });
+
+const dispatchRecipientSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+const dispatchRecipientsSchema = z.array(dispatchRecipientSchema).min(1);
 
 export async function syncGmail(
   prevState: SyncResult | undefined,
@@ -115,7 +125,13 @@ export async function syncGmail(
         
         const noticeId = String(message.uid);
         const existingNotice = await getStoredNoticeById(noticeId);
-        if (existingNotice) {
+        const needsPdfBackfill = Boolean(
+          existingNotice?.attachments.some(
+            (attachment) => isPdfAttachment(attachment) && !attachmentHasStoredContent(attachment)
+          )
+        );
+
+        if (existingNotice && !needsPdfBackfill) {
           stats.skipped++;
           continue;
         }
@@ -129,12 +145,24 @@ export async function syncGmail(
         if (planCodes.length > 0) {
           stats.matched++;
           
-          const attachments = parsed.attachments.map(att => ({
-            id: att.cid || att.checksum,
-            filename: att.filename || 'untitled',
-            contentType: att.contentType,
-            size: att.size,
-          }));
+          const attachments = await Promise.all(
+            parsed.attachments.map((attachment) =>
+              persistParsedAttachment(noticeId, {
+                cid: attachment.cid,
+                checksum: attachment.checksum,
+                filename: attachment.filename,
+                contentType: attachment.contentType,
+                size: attachment.size,
+                content: attachment.content,
+              })
+            )
+          );
+
+          if (existingNotice) {
+            await updateStoredNotice(noticeId, { attachments });
+            stats.skipped++;
+            continue;
+          }
 
           await createStoredNotice(noticeId, {
             subject: parsed.subject || 'No Subject',
@@ -255,24 +283,39 @@ export async function markNoticeAsIgnored(id: string) {
   revalidatePath(`/inbox/${id}`);
 }
 
-export async function dispatchNotice(noticeId: string, ownerId: string) {
-    await updateStoredNotice(noticeId, {
-      status: 'Dispatched',
-      assignedOwnerId: ownerId,
-      assignedOwnerIds: null,
-    });
-    revalidatePath('/inbox');
-    revalidatePath(`/inbox/${noticeId}`);
-    revalidatePath('/history');
+export async function dispatchNotice(
+  noticeId: string,
+  recipient: { id: string; name: string; email: string }
+) {
+    return dispatchGroupNotice(noticeId, [recipient]);
 }
 
-export async function dispatchGroupNotice(noticeId: string, ownerIds: string[]) {
+export async function dispatchGroupNotice(
+  noticeId: string,
+  recipientsInput: Array<{ id: string; name: string; email: string }>
+) {
+    const recipients = dispatchRecipientsSchema.parse(recipientsInput);
+    const notice = await getStoredNoticeById(noticeId);
+
+    if (!notice) {
+      throw new Error('Notice not found.');
+    }
+
+    await sendDispatchEmail(notice, recipients);
+
+    const ownerIds = recipients.map((recipient) => recipient.id);
     await updateStoredNotice(noticeId, {
       status: 'Dispatched',
-      assignedOwnerId: null,
-      assignedOwnerIds: ownerIds,
+      assignedOwnerId: ownerIds.length === 1 ? ownerIds[0] : null,
+      assignedOwnerIds: ownerIds.length === 1 ? null : ownerIds,
     });
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
     revalidatePath('/history');
+
+    return {
+      success: true,
+      recipients: recipients.length,
+      pdfAttachments: notice.attachments.filter((attachment) => attachment.isPdf).length,
+    };
 }

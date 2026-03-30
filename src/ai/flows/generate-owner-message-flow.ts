@@ -29,6 +29,18 @@ const generateOwnerMessagePrompt = ai.definePrompt({
 Your task is to draft a clear, professional, and friendly email body to be sent to property owners based on a structured summary of a notice.
 The message should be easy to understand for a layperson.
 
+Write the message primarily in natural Simplified Chinese.
+Do not translate too literally. The result should read like a polished message written by a Chinese-speaking strata manager, not a word-for-word translation.
+Keep the following in English or original form whenever that is more natural or clearer:
+- strata plan codes, unit numbers, parking/locker identifiers
+- building names, company names, contractor names, product names
+- URLs, email addresses, phone numbers
+- official titles, forms, or labels that are normally used in English
+
+If a term is commonly understood in English in this context, keep it in English instead of forcing a Chinese translation.
+If the notice says no owner action is needed, state that clearly in Chinese.
+Prefer short paragraphs or concise bullet-style lines inside the body when that improves clarity.
+
 Here is the structured information:
 - Subject/What: {{{what}}}
 - When it's happening: {{{when}}}
