@@ -13,8 +13,8 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   if (!hasFirebaseAdminConfig()) {
     return NextResponse.json(
-      { error: 'Firebase admin credentials are missing on the server.' },
-      { status: 500 }
+      { error: 'Sign-in is temporarily unavailable.' },
+      { status: 503 }
     );
   }
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const idToken = body?.idToken?.trim();
 
   if (!idToken) {
-    return NextResponse.json({ error: 'Missing Firebase ID token.' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid sign-in request.' }, { status: 400 });
   }
 
   try {
@@ -39,11 +39,9 @@ export async function POST(request: Request) {
     });
 
     return response;
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || 'Failed to create admin session.' },
-      { status: 401 }
-    );
+  } catch (error) {
+    console.error('Failed to create login session:', error);
+    return NextResponse.json({ error: 'Unable to finish sign-in right now.' }, { status: 401 });
   }
 }
 

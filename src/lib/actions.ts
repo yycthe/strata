@@ -77,7 +77,7 @@ export async function syncGmail(
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     return {
       status: 'error',
-      message: 'Gmail credentials are not configured in the environment variables. Please add GMAIL_USER and GMAIL_APP_PASSWORD.',
+      message: 'Live Gmail sync is temporarily unavailable.',
     };
   }
 
@@ -199,10 +199,10 @@ export async function syncGmail(
   } catch (err: any) {
     console.error('Gmail sync failed:', err);
     logInfo.status = 'fail';
-    logInfo.error = err.message;
+    logInfo.error = 'Sync failed.';
     return {
       status: 'error',
-      message: `Sync failed: ${err.message}`,
+      message: 'Sync failed. Please check the mailbox connection and try again.',
     };
   } finally {
     try {
@@ -244,7 +244,7 @@ export async function runAiTriage(noticeId: string, content: string) {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('Gemini API key is not configured in the environment variables.');
+    throw new Error('AI triage is temporarily unavailable.');
   }
 
   try {
@@ -269,7 +269,7 @@ export async function runAiTriage(noticeId: string, content: string) {
     await updateStoredNotice(noticeId, { status: 'Review' });
     revalidatePath('/inbox');
     revalidatePath(`/inbox/${noticeId}`);
-    throw new Error(`AI Triage failed: ${err.message}`);
+    throw new Error('AI triage could not complete. Please try again.');
   }
 }
 

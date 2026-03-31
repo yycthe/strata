@@ -35,9 +35,7 @@ function getFirebaseStorageBucketName(): string {
   const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
 
   if (!bucketName) {
-    throw new Error(
-      'Missing Firebase storage bucket environment variable. Set FIREBASE_STORAGE_BUCKET or NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET before fetching PDF attachments on the server.'
-    );
+    throw new Error('Server file storage is not configured.');
   }
 
   return bucketName;
@@ -47,9 +45,7 @@ export function getAdminApp(): App {
   const config = getFirebaseAdminConfig();
 
   if (!config) {
-    throw new Error(
-      'Missing Firebase admin environment variables. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY before using Firestore on the server.'
-    );
+    throw new Error('Server data access is not configured.');
   }
 
   if (!getApps().length) {

@@ -267,28 +267,11 @@
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "password"
     ]
   },
   "firestore": {
     "structure": [
-      {
-        "path": "/roles_admin/{userId}",
-        "definition": {
-          "entityName": "adminRole",
-          "schema": {
-            "$ref": "#/backend/entities/adminRole"
-          },
-          "description": "Auxiliary collection to define administrators of the application. A document's ID corresponds to a Firebase user's UID, granting them administrative privileges. This is for DBAC (Database Access Control) and enables Authorization Independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique Firebase Authentication UID of the administrator."
-            }
-          ]
-        }
-      },
       {
         "path": "/strataNotices/{noticeId}",
         "definition": {
@@ -296,7 +279,7 @@
           "schema": {
             "$ref": "#/backend/entities/StrataNotice"
           },
-          "description": "Main collection for all ingested and processed strata notices. All documents are accessible to authenticated administrators. Supports queries for Inbox, Sent History, and search features.",
+          "description": "Main collection for all ingested and processed strata notices. Reads and writes happen through the trusted server runtime after Firebase Authentication sign-in. Supports queries for Inbox, Sent History, and search features.",
           "params": [
             {
               "name": "noticeId",
@@ -312,7 +295,7 @@
           "schema": {
             "$ref": "#/backend/entities/Owner"
           },
-          "description": "Master data collection for property owners. All documents are accessible to authenticated administrators, used for targeted notice dispatch.",
+          "description": "Master data collection for property owners. Reads and writes happen through the trusted server runtime after Firebase Authentication sign-in, used for targeted notice dispatch.",
           "params": [
             {
               "name": "ownerId",
@@ -328,7 +311,7 @@
           "schema": {
             "$ref": "#/backend/entities/Property"
           },
-          "description": "Master data collection for individual property units. All documents are accessible to authenticated administrators, providing details for strata plan information.",
+          "description": "Master data collection for individual property units. Reads and writes happen through the trusted server runtime after Firebase Authentication sign-in, providing details for strata plan information.",
           "params": [
             {
               "name": "propertyId",
@@ -344,7 +327,7 @@
           "schema": {
             "$ref": "#/backend/entities/SyncLog"
           },
-          "description": "Records the history and outcome of Gmail synchronization operations. All documents are accessible to authenticated administrators for system monitoring.",
+          "description": "Records the history and outcome of Gmail synchronization operations. Reads and writes happen through the trusted server runtime for system monitoring.",
           "params": [
             {
               "name": "logId",
@@ -360,7 +343,7 @@
           "schema": {
             "$ref": "#/backend/entities/Attachment"
           },
-          "description": "Stores metadata for attachments associated with a StrataNotice. Includes denormalized 'noticeId' for linking. All documents are accessible to authenticated administrators, supporting direct retrieval via API.",
+          "description": "Stores metadata for attachments associated with a StrataNotice. Includes denormalized 'noticeId' for linking. Reads and writes happen through the trusted server runtime, supporting direct retrieval via API.",
           "params": [
             {
               "name": "attachmentId",
@@ -370,6 +353,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure for StrataPulse Pro is designed around an 'admin-centric' authorization model, prioritizing Authorization Independence and efficient QAPs (Queries as Permissions). All core business entities—StrataNotice, Owner, Property, Attachment, and SyncLog—are placed in top-level collections.\n\nAuthorization Independence is achieved by centralizing the administrative role check. We assume that any authenticated user of the StrataPulse Pro application is either an administrator or has no access to the core business data. An auxiliary collection, '/roles_admin/{uid}', is introduced to explicitly mark user UIDs as administrators. This means that access to '/strataNotices', '/owners', '/properties', '/attachments', and '/syncLogs' is primarily gated by checking if 'request.auth.uid' corresponds to an existing document in '/roles_admin'. This strategy eliminates the need for complex, performance-impacting 'get()' operations in security rules to check for ownership or membership on a per-document basis for application users. The 'assignedOwnerId'/'assignedOwnerIds' in StrataNotice and 'noticeId' in Attachment are used for data relationships and application logic, not for granular Firebase Security Rules authorization checks for the application's users.\n\nQAPs (Queries as Permissions) are inherently supported by this structure. Since all documents within each collection share the same security posture (admin-level access), `list` operations become straightforward and secure. For example, an authenticated administrator can query '/strataNotices' and apply filters on data attributes like 'status' (e.g., 'New', 'Ready', 'Dispatched'), 'planCode', or 'receivedAt' directly. The security rules only need to verify the user's 'admin' status, allowing the database to efficiently serve filtered results without the rules attempting to filter data themselves. This ensures that a query always returns only the data the user is authorized to see, making the intention clear and debugging simple. Structural Segregation is applied by keeping distinct logical entities in separate collections, maintaining homogeneous security requirements within each collection."
+    "reasoning": "The Firestore structure for StrataPulse Pro is centered on server-mediated access. All core business entities—StrataNotice, Owner, Property, Attachment, and SyncLog—live in top-level collections, but reads and writes happen through trusted server code that uses the Firebase Admin SDK after a user has signed in with Firebase Authentication.\n\nThis model keeps browser clients away from direct Firestore access for live data. Application logic such as dispatch targeting, Gmail sync, and attachment retrieval is enforced on the server, which simplifies the security posture and avoids duplicating authorization logic in Firestore rules. Client-side login proves user identity, while the server owns data access and mutation.\n\nQAP-style filtering still happens cleanly at the application layer. The server can query '/strataNotices' by status, planCode, or receivedAt, and can join owner and property records without exposing direct collection reads to browsers. Structural segregation remains useful because each collection still represents one logical entity, but the trust boundary now sits at the server rather than in client-side Firestore permissions."
   }
 }

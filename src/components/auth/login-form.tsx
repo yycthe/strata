@@ -11,6 +11,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+function getFriendlyLoginErrorMessage(error: unknown): string {
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'Email or password is incorrect.';
+    case 'auth/too-many-requests':
+      return 'Too many sign-in attempts. Please wait a moment and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error while signing in. Please try again.';
+    default:
+      return 'Unable to sign in right now. Please try again.';
+  }
+}
+
 export function LoginForm() {
   const router = useRouter();
   const { auth } = useFirebase();
@@ -39,13 +60,23 @@ export function LoginForm() {
 
         if (!response.ok) {
           await signOut(auth);
-          throw new Error(payload?.error || 'Unable to start admin session.');
+          throw new Error(
+            response.status >= 500
+              ? 'Sign-in is temporarily unavailable. Please try again shortly.'
+              : payload?.error || 'Unable to sign in right now. Please try again.'
+          );
         }
 
         router.push('/');
         router.refresh();
-      } catch (error: any) {
-        setErrorMessage(error.message || 'Login failed.');
+      } catch (error) {
+        const message =
+          typeof error === 'object' && error && 'code' in error
+            ? getFriendlyLoginErrorMessage(error)
+            : error instanceof Error && error.message
+              ? error.message
+              : 'Unable to sign in right now. Please try again.';
+        setErrorMessage(message);
       }
     });
   };

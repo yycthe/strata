@@ -38,9 +38,7 @@ export function getFirebaseClientConfig(): FirebaseClientConfig {
     .map(([name]) => name);
 
   if (missingVars.length > 0) {
-    throw new Error(
-      `Missing Firebase client environment variables: ${missingVars.join(', ')}`
-    );
+    throw new Error('Firebase client configuration is incomplete.');
   }
 
   return {

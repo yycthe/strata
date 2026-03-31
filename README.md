@@ -32,8 +32,6 @@ These are server-only variables used by Vercel to persist notices, sync logs, an
 - `GEMINI_API_KEY`
 - `GMAIL_USER`
 - `GMAIL_APP_PASSWORD`
-- `APP_BASIC_AUTH_USER`
-- `APP_BASIC_AUTH_PASSWORD`
 
 ## Local Development
 
@@ -45,11 +43,11 @@ Without Firebase admin credentials, local development falls back to the existing
 2. Add every variable listed above in the project settings before the first production deploy.
 3. Redeploy after adding the variables.
 4. Make sure the Firebase service account used by `FIREBASE_CLIENT_EMAIL` has Firestore access to your Firebase project.
-5. Set `APP_BASIC_AUTH_USER` and `APP_BASIC_AUTH_PASSWORD` if you want the whole app protected behind a simple login prompt, which is strongly recommended for this internal workflow tool.
+5. Enable Firebase Authentication `Email/Password` and create at least one valid sign-in account for the live workspace.
 
-## Data Model
+## Access Model
 
-- `owners` still use the client-side Firebase SDK.
-- `owners` therefore still require a signed-in Firebase user whose UID exists in `/roles_admin/{uid}`.
-- `strataNotices`, `syncLogs`, and `properties` now use Firestore on the server when Firebase admin variables are present.
+- Live workspace access uses Firebase Authentication email/password sign-in.
+- Demo workspace is separate and uses sample data without touching live Gmail, Firestore, or owner records.
+- `strataNotices`, `syncLogs`, `owners`, and `properties` run through server-side Firestore access when Firebase admin variables are present.
 - The app forces dynamic rendering for database-backed pages so Vercel does not freeze empty build-time snapshots into production.

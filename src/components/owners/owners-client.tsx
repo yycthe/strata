@@ -142,7 +142,7 @@ export function OwnersClient({ initialOwners, importEnabled, demoMode }: OwnersC
         <CardContent className="space-y-4">
           {!importEnabled && !demoMode && (
             <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              Buildium import is unavailable until `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` are configured on the server.
+              Buildium import is unavailable until server storage is configured for this deployment.
             </div>
           )}
           {demoMode && (

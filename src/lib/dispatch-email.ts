@@ -20,9 +20,7 @@ function getDispatchCredentials() {
   const pass = process.env.GMAIL_APP_PASSWORD;
 
   if (!user || !pass) {
-    throw new Error(
-      'Gmail dispatch is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD before dispatching notices.'
-    );
+    throw new Error('Email dispatch is temporarily unavailable.');
   }
 
   return { user, pass };

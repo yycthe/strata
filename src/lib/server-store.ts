@@ -35,9 +35,7 @@ function getStoreMode(): 'firestore' | 'sqlite' {
   }
 
   if (isVercelRuntime()) {
-    throw new Error(
-      'Vercel deployment requires Firestore server credentials. Add FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY to keep notices and sync logs persistent.'
-    );
+    throw new Error('Persistent server storage is not configured for this deployment.');
   }
 
   return 'sqlite';

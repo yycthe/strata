@@ -47,8 +47,8 @@ export async function POST(request: Request) {
 
   if (!hasFirebaseAdminConfig()) {
     return NextResponse.json(
-      { error: 'Missing Firebase admin credentials. Buildium import requires FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.' },
-      { status: 500 }
+      { error: 'Buildium import is temporarily unavailable.' },
+      { status: 503 }
     );
   }
 
@@ -94,9 +94,10 @@ export async function POST(request: Request) {
     revalidatePath('/inbox');
 
     return NextResponse.json({ ok: true, stats });
-  } catch (error: any) {
+  } catch (error) {
+    console.error('Buildium import failed:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to import Buildium CSV.' },
+      { error: 'Unable to import this CSV right now. Please verify the file format and try again.' },
       { status: 400 }
     );
   }
