@@ -32,13 +32,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  if (pathname.startsWith('/login')) {
-    return <>{children}</>;
-  }
-
   useEffect(() => {
     setIsDemoMode(document.cookie.includes('strata_demo_mode=1'));
   }, [pathname]);
+
+  if (pathname.startsWith('/login')) {
+    return <>{children}</>;
+  }
 
   const menuItems = [
     { href: '/', label: 'Overview', icon: LayoutDashboard },
