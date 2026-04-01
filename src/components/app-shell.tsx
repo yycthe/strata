@@ -30,10 +30,15 @@ import { useFirebase } from '@/firebase';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   if (pathname.startsWith('/login')) {
     return <>{children}</>;
   }
+
+  useEffect(() => {
+    setIsDemoMode(document.cookie.includes('strata_demo_mode=1'));
+  }, [pathname]);
 
   const menuItems = [
     { href: '/', label: 'Overview', icon: LayoutDashboard },
@@ -70,7 +75,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   isActive={pathname === item.href}
                   tooltip={item.label}
                 >
-                  <Link href={item.href}>
+                  <Link
+                    href={
+                      isDemoMode
+                        ? `/api/demo-mode?enable=1&redirect=${encodeURIComponent(item.href)}`
+                        : item.href
+                    }
+                    prefetch={false}
+                  >
                     <item.icon />
                     <span>{item.label}</span>
                   </Link>
@@ -80,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <AuthStatus />
+          <AuthStatus isDemoMode={isDemoMode} />
           <Separator className="my-2" />
           <SystemStatus />
         </SidebarFooter>
@@ -90,15 +102,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AuthStatus() {
+function AuthStatus({ isDemoMode }: { isDemoMode: boolean }) {
   const { auth, user, isUserLoading } = useFirebase();
   const pathname = usePathname();
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-
-  useEffect(() => {
-    setIsDemoMode(document.cookie.includes('strata_demo_mode=1'));
-  }, [pathname]);
 
   if (isUserLoading) {
     return <div className="text-xs text-muted-foreground">Checking access...</div>;
