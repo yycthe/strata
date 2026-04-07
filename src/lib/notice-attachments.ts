@@ -96,23 +96,30 @@ export async function persistParsedAttachment(
     return attachment;
   }
 
-  if (hasFirebaseAdminConfig()) {
-    attachment.storagePath = await persistAttachmentToFirebaseStorage(
+  try {
+    if (hasFirebaseAdminConfig()) {
+      attachment.storagePath = await persistAttachmentToFirebaseStorage(
+        noticeId,
+        attachmentId,
+        filename,
+        contentType,
+        parsedAttachment.content
+      );
+      return attachment;
+    }
+
+    attachment.localPath = await persistAttachmentLocally(
       noticeId,
       attachmentId,
       filename,
-      contentType,
       parsedAttachment.content
     );
-    return attachment;
+  } catch (error) {
+    console.error(
+      `Failed to persist PDF attachment for notice ${noticeId} (${filename}). Continuing with metadata only.`,
+      error
+    );
   }
-
-  attachment.localPath = await persistAttachmentLocally(
-    noticeId,
-    attachmentId,
-    filename,
-    parsedAttachment.content
-  );
 
   return attachment;
 }
