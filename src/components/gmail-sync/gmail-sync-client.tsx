@@ -111,6 +111,7 @@ export function GmailSyncClient({ logs, demoMode }: { logs: SyncLog[]; demoMode:
                   <TableHead>Status</TableHead>
                   <TableHead>Emails Scanned</TableHead>
                   <TableHead>New Notices</TableHead>
+                  <TableHead>Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -120,6 +121,9 @@ export function GmailSyncClient({ logs, demoMode }: { logs: SyncLog[]; demoMode:
                     <TableCell>{log.status}</TableCell>
                     <TableCell>{log.found}</TableCell>
                     <TableCell>{log.inserted}</TableCell>
+                    <TableCell className="max-w-xs text-sm text-muted-foreground">
+                      {log.error || '—'}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

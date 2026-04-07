@@ -67,6 +67,54 @@ const dispatchRecipientSchema = z.object({
 
 const dispatchRecipientsSchema = z.array(dispatchRecipientSchema).min(1);
 
+function describeGmailSyncError(error: unknown): { userMessage: string; logMessage: string } {
+  const rawMessage =
+    typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  const normalized = rawMessage.toLowerCase();
+
+  if (
+    normalized.includes('authentication') ||
+    normalized.includes('invalid credentials') ||
+    normalized.includes('login failed') ||
+    normalized.includes('auth') ||
+    normalized.includes('app password')
+  ) {
+    return {
+      userMessage:
+        'Gmail login failed. Check that GMAIL_USER is correct and that GMAIL_APP_PASSWORD is a valid Gmail app password.',
+      logMessage: 'Gmail authentication failed.',
+    };
+  }
+
+  if (normalized.includes('imap') && normalized.includes('disabled')) {
+    return {
+      userMessage: 'Gmail IMAP access appears to be disabled for this mailbox. Enable IMAP in Gmail settings and try again.',
+      logMessage: 'Gmail IMAP is disabled.',
+    };
+  }
+
+  if (
+    normalized.includes('timeout') ||
+    normalized.includes('econnreset') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('enotfound') ||
+    normalized.includes('network') ||
+    normalized.includes('socket')
+  ) {
+    return {
+      userMessage: 'Gmail connection failed. Please try again in a moment and verify the mailbox can be reached.',
+      logMessage: 'Gmail connection failed.',
+    };
+  }
+
+  return {
+    userMessage: 'Sync failed. Please check the mailbox connection and try again.',
+    logMessage: 'Sync failed.',
+  };
+}
+
 export async function syncGmail(
   prevState: SyncResult | undefined,
   formData: FormData
@@ -198,11 +246,12 @@ export async function syncGmail(
     }
   } catch (err: any) {
     console.error('Gmail sync failed:', err);
+    const syncError = describeGmailSyncError(err);
     logInfo.status = 'fail';
-    logInfo.error = 'Sync failed.';
+    logInfo.error = syncError.logMessage;
     return {
       status: 'error',
-      message: 'Sync failed. Please check the mailbox connection and try again.',
+      message: syncError.userMessage,
     };
   } finally {
     try {
