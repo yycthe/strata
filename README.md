@@ -1,14 +1,44 @@
-# Strata
+# Strata Notice Operations Workspace
 
-This project is a Next.js App Router app for strata notice intake, AI triage, and owner dispatch workflows.
+A Next.js application for receiving strata notices, using AI to summarize and categorize them, matching notices to properties and owners, and preparing owner communications.
 
-## Required Environment Variables
+## Core workflows
 
-Copy `.env.example` to `.env.local` for local development.
+- Synchronize notice emails and attachments from Gmail
+- Summarize and categorize notices with Genkit and Gemini
+- Match building identifiers to managed properties
+- Review notices in an operations inbox
+- Generate and dispatch owner-facing messages
+- Import property information from Buildium CSV exports
+- Track notice history, owners, properties, and sync activity
+- Use an isolated demo workspace without touching live data
 
-### Firebase client config
+## Stack
 
-These are safe to expose to the browser and should be configured as `NEXT_PUBLIC_` variables:
+- Next.js 15 App Router, React 19, and TypeScript
+- Genkit with Google Gemini
+- Firebase Authentication and Firestore
+- Gmail via IMAP and outbound mail via Nodemailer
+- SQLite fallback for local development
+- Tailwind CSS, Radix UI, and Recharts
+
+## Local development
+
+Requirements: Node.js 22 and npm.
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+The application runs at `http://localhost:9002`.
+
+Without Firebase Admin credentials, local development uses `workflow.db`. Vercel intentionally does not use SQLite because its filesystem is ephemeral.
+
+## Environment variables
+
+Firebase client:
 
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
@@ -17,37 +47,42 @@ These are safe to expose to the browser and should be configured as `NEXT_PUBLIC
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 
-### Firebase admin config
-
-These are server-only variables used by Vercel to persist notices, sync logs, and properties in Firestore:
+Server-side:
 
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
-
-`FIREBASE_PRIVATE_KEY` can be pasted into Vercel either as a multiline value or with `\n` characters. The app normalizes `\n` automatically.
-
-### Other server-only secrets
-
 - `GEMINI_API_KEY`
 - `GMAIL_USER`
 - `GMAIL_APP_PASSWORD`
 
-## Local Development
+Keep all server-side values out of client code and commits.
 
-Without Firebase admin credentials, local development falls back to the existing SQLite file (`workflow.db`) for notices, sync logs, and properties. On Vercel, that fallback is intentionally disabled because filesystem storage is ephemeral.
+## Commands
 
-## Vercel Deployment Notes
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start Next.js with Turbopack |
+| `npm run build` | Create a production build |
+| `npm run start` | Start the production server |
+| `npm run typecheck` | Run TypeScript checks |
+| `npm run genkit:dev` | Start the Genkit development flow |
+| `npm run genkit:watch` | Start Genkit in watch mode |
 
-1. Import this repository into Vercel.
-2. Add every variable listed above in the project settings before the first production deploy.
-3. Redeploy after adding the variables.
-4. Make sure the Firebase service account used by `FIREBASE_CLIENT_EMAIL` has Firestore access to your Firebase project.
-5. Enable Firebase Authentication `Email/Password` and create at least one valid sign-in account for the live workspace.
+## Key directories
 
-## Access Model
+- `src/app/inbox/` — notice queue and detail workspace
+- `src/app/gmail-sync/` — synchronization interface
+- `src/ai/flows/` — notice summarization and owner-message generation
+- `src/lib/server-store.ts` — server-side persistence abstraction
+- `src/lib/owner-matching.ts` — owner/property matching
+- `src/lib/dispatch-email.ts` — owner email dispatch
+- `src/lib/buildium-import.ts` — Buildium data import
 
-- Live workspace access uses Firebase Authentication email/password sign-in.
-- Demo workspace is separate and uses sample data without touching live Gmail, Firestore, or owner records.
-- `strataNotices`, `syncLogs`, `owners`, and `properties` run through server-side Firestore access when Firebase admin variables are present.
-- The app forces dynamic rendering for database-backed pages so Vercel does not freeze empty build-time snapshots into production.
+## Deployment
+
+Import the repository into Vercel, add every required variable, enable Firebase Email/Password authentication, and ensure the service account has Firestore access. Redeploy after changing environment variables.
+
+## Security and scope
+
+The demo workspace is isolated from Gmail, Firestore, and live owner records. Review generated summaries and messages before dispatch. This project is an operational prototype, not legal advice or a substitute for strata-document review.
